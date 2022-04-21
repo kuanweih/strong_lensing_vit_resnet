@@ -46,11 +46,6 @@ from transformers import ViTModel, ViTConfig, ViTFeatureExtractor, ViTForImageCl
 
 
 
-def print_n_train_params(model):
-    n = sum(param.numel() for param in model.parameters() if param.requires_grad)
-    print(f"Number of trainable parameters: {n}")
-
-
 class DeepLenstronomyDataset(Dataset):  # torch.utils.data.Dataset
     def __init__(self, root_dir, train=True, transform=None, target_transform=None):
         self.root_dir = root_dir
@@ -74,8 +69,8 @@ class DeepLenstronomyDataset(Dataset):  # torch.utils.data.Dataset
     def __getitem__(self, index):
         img_path = self.path + self.df['img_path'].values[index][-13:]
         img = np.load(img_path)
-        img = scipy.ndimage.zoom(img, 224/100, order=1)
-        image = np.zeros((3, 224, 224))
+        img = scipy.ndimage.zoom(img, 224/100, order=1)  #TODO: this is hard coded
+        image = np.zeros((3, 224, 224))  #TODO: this is hard coded
         for i in range(3):
             image[i, :, :] += img
 
@@ -99,59 +94,71 @@ class DeepLenstronomyDataset(Dataset):  # torch.utils.data.Dataset
             "lens_light_R_sersic", 
             "lens_light_n_sersic",
         ]
-
         target_res = {key: self.df[key].iloc[[index]].values for key in target_keys}
-           
-
-        # return image, theta_E, gamma.values, center_x.values, center_y.values, e1.values, e2.values, source_x.values, source_y.values, gamma_ext.values, psi_ext.values, source_R_sersic.values, source_n_sersic.values, sersic_source_e1.values, sersic_source_e2.values, lens_light_e1.values, lens_light_e2.values, lens_light_R_sersic.values, lens_light_n_sersic.values
 
         return image, target_res
         
-
     def __len__(self):
         return self.df.shape[0]
 
 
 
 
+def print_n_train_params(model):
+    n = sum(param.numel() for param in model.parameters() if param.requires_grad)
+    print(f"Number of trainable parameters: {n}")
+
+
+def prepare_data_and_target(data, target_dict):
+    data = Variable(data.float()).cuda()
+    for key, val in target_dict.items():
+        target_dict[key] = Variable(val.float()).cuda()
+    target = torch.cat([val for _, val in target_dict.items()], dim=1)
+    return data, target
+
+
+def calc_avg_rms(total_rms, total_counter):
+    avg_rms = total_rms / total_counter
+    avg_rms = avg_rms.cpu()
+    avg_rms = (avg_rms.data).numpy()
+    return avg_rms
+
+
+def add_scalar_tb(avg_rms):
+    for i in range(len(avg_rms)):
+        tb.add_scalar(f"rms {i + 1}", avg_rms[i])
+
 
 
 
 if __name__ == '__main__':
 
+    EPOCH = 2
+    glo_batch_size = 16
+    test_num_batch = 50
+
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(device)
 
-
     # file name
     model_name = "gz2_hug_vit_010822B"
-
 
     # Vision Transformer
     feature_extractor = ViTFeatureExtractor.from_pretrained('google/vit-base-patch16-224')
     model = ViTForImageClassification.from_pretrained('google/vit-base-patch16-224')
     print_n_train_params(model)
 
-
     # # freeze the weights
     # for param in model.parameters():
     #     param.requires_grad = False
-
 
     # change the last layer
     model.classifier = nn.Linear(in_features=768, out_features=18, bias=True)
     print_n_train_params(model)
 
-
-
+    
     # LensDatasets
-
     dataset_folder = Path("C:/Users/abcd2/Downloads/dev_256/")
-
-    EPOCH = 2
-    glo_batch_size = 16
-    test_num_batch = 50
-
 
     data_transform = transforms.Compose([
         transforms.ToTensor(), # scale to [0,1] and convert to tensor
@@ -165,13 +172,11 @@ if __name__ == '__main__':
         transform=data_transform, 
         target_transform=target_transform,
     )
-
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
         batch_size=glo_batch_size, 
         shuffle=True,
     )
-
 
     test_dataset = DeepLenstronomyDataset(
         dataset_folder, 
@@ -179,7 +184,6 @@ if __name__ == '__main__':
         transform=data_transform, 
         target_transform=target_transform,
     )
-
     test_loader = torch.utils.data.DataLoader(
         test_dataset,
         batch_size=glo_batch_size, 
@@ -187,45 +191,39 @@ if __name__ == '__main__':
     )
 
 
-
+    # model setup
     net = model
-    loss_fn = nn.MSELoss(reduction='sum')
-
     net.cuda()  #TODO: combine with net = model above?
-
+    
+    loss_fn = nn.MSELoss(reduction='sum')
     optimizer = optim.Adam(net.parameters(), lr = 1e-4)
     tb = SummaryWriter()
 
     best_accuracy = float("inf")
-
 
     if not os.path.exists('./saved_model/'):
         os.mkdir('./saved_model/')
         # net = torch.load('./saved_model/resnet18.mdl')
         # print('loaded mdl!')
 
-
+    # training
     for epoch in range(EPOCH):
 
         net.train()
+
         total_loss = 0.0
         total_counter = 0
         total_rms = 0
 
         # for batch_idx, (data, target_dict) in enumerate(tqdm(train_loader, total=len(train_loader))):
         for batch_idx, (data, target_dict) in enumerate(train_loader):
-            
-            data = Variable(data.float()).cuda()
-
-            for key, val in target_dict.items():
-                target_dict[key] = Variable(val.float()).cuda()
+            data, target = prepare_data_and_target(data, target_dict)
 
             optimizer.zero_grad()
+
             output = net(data)[0]  #TODO: this is hard coded
 
-            target = torch.cat([val for _, val in target_dict.items()], dim=1)
-
-            loss_theta_E = loss_fn(100* output[0], 100* target[0])  #TODO: this is hard coded
+            loss_theta_E = loss_fn(100*output[0], 100*target[0])  #TODO: this is hard coded
             loss_others = loss_fn(output, target)
             loss = loss_theta_E + loss_others
 
@@ -237,39 +235,28 @@ if __name__ == '__main__':
             loss.backward()
             optimizer.step()
 
+        avg_rms = calc_avg_rms(total_rms, total_counter)
+        add_scalar_tb(avg_rms)
 
-        # Collect RMS over each label
-        avg_rms = total_rms / (total_counter)
-        avg_rms = avg_rms.cpu()
-        avg_rms = (avg_rms.data).numpy()
-        for i in range(len(avg_rms)):
-            tb.add_scalar(f"rms {i + 1}", avg_rms[i])
-
-        # print test loss and tets rms
-        print(epoch, 'Train loss (averge per batch wise):', total_loss/(total_counter), ' RMS (average per batch wise):', np.array_str(avg_rms, precision=3))
+        print(epoch, 'Train loss (averge per batch wise):', total_loss/(total_counter), 
+              ' RMS (average per batch wise):', np.array_str(avg_rms, precision=3))
 
 
         with torch.no_grad():
             net.eval()
+
             total_loss = 0.0
             total_counter = 0
             total_rms = 0
 
             for batch_idx, (data, target_dict) in enumerate(test_loader):
-
-                data = Variable(data.float()).cuda()
-
-                for key, val in target_dict.items():
-                    target_dict[key] = Variable(val.float()).cuda()
-
-                target = torch.cat([val for _, val in target_dict.items()], dim=1)
+                data, target = prepare_data_and_target(data, target_dict)
 
                 pred = net(data)[0]  #TODO: this is hard coded
 
                 loss_theta_E = loss_fn(100* pred[0], 100* target[0])  #TODO: this is hard coded
                 loss_others = loss_fn(pred, target)
                 loss = loss_theta_E + loss_others
-                #loss = loss_fn(pred[0], target[0])
 
                 square_diff = (pred - target)
                 total_rms += square_diff.std(dim=0)
@@ -280,16 +267,13 @@ if __name__ == '__main__':
                     tb.add_scalar('test_loss', loss.item())
                     break
 
-            # Collect RMS over each label
-            avg_rms = total_rms / (total_counter)
-            avg_rms = avg_rms.cpu()
-            avg_rms = (avg_rms.data).numpy()
-            for i in range(len(avg_rms)):
-                tb.add_scalar(f"rms {i + 1}", avg_rms[i])
+            avg_rms = calc_avg_rms(total_rms, total_counter)
+            add_scalar_tb(avg_rms)
 
+            print(epoch, 'Test loss (averge per batch wise):', total_loss/(total_counter), 
+                  ' RMS (average per batch wise):', np.array_str(avg_rms, precision=3))
 
-            # print test loss and test rms
-            print(epoch, 'Test loss (averge per batch wise):', total_loss/(total_counter), ' RMS (average per batch wise):', np.array_str(avg_rms, precision=3))
+            #TODO: work on the saving part later
             # if total_loss/(total_counter) < best_accuracy:
             #     best_accuracy = total_loss/(total_counter)
             #     datetime_today = str(datetime.date.today())
