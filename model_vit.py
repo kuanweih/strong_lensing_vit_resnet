@@ -1,5 +1,5 @@
 """ Code taken from https://github.com/joshualin24/vit_strong_lensing/blob/master/vit.py 
-    Was originally created by 2022-4-4 neural networks by Joshua Yao-Yu Lin
+    Was originally created by 2022-4-4 neural modelworks by Joshua Yao-Yu Lin
     Then modified by Kuan-Wei Huang
 """
 
@@ -198,34 +198,32 @@ if __name__ == '__main__':
     train_loader, test_loader = get_train_test_dataloaders(BATCH_SIZE, train_dataset, test_dataset)
 
     # model setup
-    net = model
-    net.cuda() 
-    
+    model = model
+    model.cuda() 
     loss_fn = nn.MSELoss(reduction='sum')
-    optimizer = optim.Adam(net.parameters(), lr=1e-4)
+    optimizer = optim.Adam(model.parameters(), lr=1e-4)
     tb = SummaryWriter()
 
     best_test_accuracy = float("inf")
 
-    if not os.path.exists('./saved_model/'):
-        os.mkdir('./saved_model/')
+    dir_model_save = Path("./saved_model")
+    if not os.path.exists(dir_model_save):
+        os.mkdir(dir_model_save)
     
     #TODO: think about this. disconnected?
-    # net = torch.load('./saved_model/resnet18.mdl')  
+    # model = torch.load('./saved_model/resmodel18.mdl')  
     # print('loaded mdl!')
 
     # training
     for epoch in range(EPOCH):
-
-        net.train()
-
+        model.train()
         cache_train = initialize_cache()
 
         # for batch_idx, (data, target_dict) in enumerate(tqdm(train_loader, total=len(train_loader))):
         for batch_idx, (data, target_dict) in enumerate(train_loader):
             data, target = prepare_data_and_target(data, target_dict)
             optimizer.zero_grad()
-            output = net(data)[0] 
+            output = model(data)[0] 
             loss = calc_loss(loss_fn, output, target)
             cache_train = update_cache(cache_train, output, target, loss)
             loss.backward()
@@ -236,14 +234,12 @@ if __name__ == '__main__':
 
 
         with torch.no_grad():
-
-            net.eval()
-
+            model.eval()
             cache_test = initialize_cache()
 
             for batch_idx, (data, target_dict) in enumerate(test_loader):
                 data, target = prepare_data_and_target(data, target_dict)
-                pred = net(data)[0]
+                pred = model(data)[0]
                 loss = calc_loss(loss_fn, pred, target)
                 cache_test = update_cache(cache_test, pred, target, loss)
 
@@ -258,8 +254,8 @@ if __name__ == '__main__':
             if test_loss_per_batch < best_test_accuracy:
                 best_test_accuracy = test_loss_per_batch
                 datetime_today = str(datetime.date.today())
-                model_save_path = f'./saved_model/power_law_pred_vit_{datetime_today}.mdl'
-                torch.save(net, model_save_path)
+                model_save_path = f'{dir_model_save}/power_law_pred_vit_{datetime_today}.mdl'
+                torch.save(model, model_save_path)
                 print(f"save model to {model_save_path}")
 
     tb.close()
