@@ -172,49 +172,9 @@ def get_train_test_dataloaders(batch_size, train_dataset, test_dataset):
     return train_loader, test_loader
 
 
+def train_model(EPOCH, model, loss_fn, optimizer, train_loader, test_loader, 
+                dir_model_save, best_test_accuracy):
 
-
-if __name__ == '__main__':
-
-    EPOCH = 2
-    BATCH_SIZE = 16
-    test_num_batch = 50  #TODO: only for print?
-
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    print(device)
-
-    # Vision Transformer
-    model = ViTForImageClassification.from_pretrained('google/vit-base-patch16-224')
-    print_n_train_params(model)
-
-    # change the last layer
-    model.classifier = nn.Linear(in_features=768, out_features=18, bias=True)
-    print_n_train_params(model)
-
-    # LensDatasets
-    dataset_folder = Path("C:/Users/abcd2/Downloads/dev_256/")
-
-    train_dataset, test_dataset = get_train_test_datasets(dataset_folder)
-    train_loader, test_loader = get_train_test_dataloaders(BATCH_SIZE, train_dataset, test_dataset)
-
-    # model setup
-    model = model
-    model.cuda() 
-    loss_fn = nn.MSELoss(reduction='sum')
-    optimizer = optim.Adam(model.parameters(), lr=1e-4)
-    tb = SummaryWriter()
-
-    best_test_accuracy = float("inf")
-
-    dir_model_save = Path("./saved_model")
-    if not os.path.exists(dir_model_save):
-        os.mkdir(dir_model_save)
-    
-    #TODO: think about this. disconnected?
-    # model = torch.load('./saved_model/resmodel18.mdl')  
-    # print('loaded mdl!')
-
-    # training
     for epoch in range(EPOCH):
         model.train()
         cache_train = initialize_cache()
@@ -231,7 +191,6 @@ if __name__ == '__main__':
 
         cache_train = calc_avg_rms(cache_train)
         print_loss_rms(epoch, 'Train', cache_train)
-
 
         with torch.no_grad():
             model.eval()
@@ -257,5 +216,49 @@ if __name__ == '__main__':
                 model_save_path = f'{dir_model_save}/power_law_pred_vit_{datetime_today}.mdl'
                 torch.save(model, model_save_path)
                 print(f"save model to {model_save_path}")
+
+
+
+
+if __name__ == '__main__':
+
+    EPOCH = 2
+    BATCH_SIZE = 16
+
+    test_num_batch = 50  #TODO: only for print?
+    best_test_accuracy = float("inf")
+
+    dataset_folder = Path("C:/Users/abcd2/Downloads/dev_256/")  # dir for dataset
+    dir_model_save = Path("./saved_model")  # dir for saving models
+
+    if not os.path.exists(dir_model_save):
+        os.mkdir(dir_model_save)
+
+    # LensDatasets
+    train_dataset, test_dataset = get_train_test_datasets(dataset_folder)
+    train_loader, test_loader = get_train_test_dataloaders(BATCH_SIZE, train_dataset, test_dataset)
+
+    # Load Vision Transformer and modify the last layer
+    model = ViTForImageClassification.from_pretrained('google/vit-base-patch16-224')
+    print_n_train_params(model)
+    model.classifier = nn.Linear(in_features=768, out_features=18, bias=True)
+    print_n_train_params(model)
+
+    # use cuda
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    print(device)
+    model.cuda() 
+
+    loss_fn = nn.MSELoss(reduction="sum")
+    optimizer = optim.Adam(model.parameters(), lr=1e-4)
+
+    tb = SummaryWriter()
+
+    #TODO: think about this. disconnected?
+    # model = torch.load('./saved_model/resmodel18.mdl')  
+    # print('loaded mdl!')
+
+    train_model(EPOCH, model, loss_fn, optimizer, train_loader, test_loader, 
+                dir_model_save, best_test_accuracy)
 
     tb.close()
