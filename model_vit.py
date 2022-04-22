@@ -136,8 +136,7 @@ def calc_loss(loss_fn, pred, target):
     return loss
 
 
-def get_train_test_dataloaders(dataset_folder, batch_size):
-
+def get_train_test_datasets(dataset_folder):
     data_transform = transforms.Compose([
         transforms.ToTensor(), # scale to [0,1] and convert to tensor
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
@@ -150,17 +149,20 @@ def get_train_test_dataloaders(dataset_folder, batch_size):
         transform=data_transform, 
         target_transform=target_transform,
     )
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=batch_size, 
-        shuffle=True,
-    )
-
     test_dataset = DeepLenstronomyDataset(
         dataset_folder, 
         train=False, 
         transform=data_transform, 
         target_transform=target_transform,
+    )
+    return train_dataset, test_dataset
+
+
+def get_train_test_dataloaders(batch_size, train_dataset, test_dataset):
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=batch_size, 
+        shuffle=True,
     )
     test_loader = DataLoader(
         test_dataset,
@@ -192,8 +194,8 @@ if __name__ == '__main__':
     # LensDatasets
     dataset_folder = Path("C:/Users/abcd2/Downloads/dev_256/")
 
-    train_loader, test_loader = get_train_test_dataloaders(dataset_folder, BATCH_SIZE)
-
+    train_dataset, test_dataset = get_train_test_datasets(dataset_folder)
+    train_loader, test_loader = get_train_test_dataloaders(BATCH_SIZE, train_dataset, test_dataset)
 
     # model setup
     net = model
