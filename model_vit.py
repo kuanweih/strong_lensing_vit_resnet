@@ -86,15 +86,15 @@ def print_n_train_params(model):
     print(f"Number of trainable parameters: {n}")
 
 
-def prepare_data_and_target(data, target_dict):
-    data = Variable(data.float()).cuda()
+def prepare_data_and_target(data, target_dict, device):
+    data = Variable(data.float()).to(device)
     for key, val in target_dict.items():
-        target_dict[key] = Variable(val.float()).cuda()
+        target_dict[key] = Variable(val.float()).to(device)
     target = torch.cat([val for _, val in target_dict.items()], dim=1)
     return data, target
 
 
-def calc_avg_rms(cache):
+def calc_avg_rms(cache, tb):
     avg_rms = cache['total_rms'] / cache['total_counter']
     avg_rms = avg_rms.cpu()
     avg_rms = (avg_rms.data).numpy()
@@ -172,24 +172,51 @@ def get_train_test_dataloaders(batch_size, train_dataset, test_dataset):
     return train_loader, test_loader
 
 
-def prepare_vit_model():
-    model = ViTForImageClassification.from_pretrained('google/vit-base-patch16-224')
+def prepare_vit_model(pretrained_model_name):
+    model = ViTForImageClassification.from_pretrained(pretrained_model_name)
     print_n_train_params(model)
     model.classifier = nn.Linear(in_features=768, out_features=18, bias=True)
     print_n_train_params(model)
     return model
 
 
-def train_model(EPOCH, model, loss_fn, optimizer, train_loader, test_loader, 
-                dir_model_save, best_test_accuracy):
+def train_model(CONFIG):
 
-    for epoch in range(EPOCH):
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    print(f"use device = {device}")
+
+    if not os.path.exists(CONFIG['dir_model_save']):
+        os.mkdir(CONFIG['dir_model_save'])
+
+    # prepare data loaders
+    train_dataset, test_dataset = get_train_test_datasets(CONFIG['dataset_folder'])
+    train_loader, test_loader = get_train_test_dataloaders(CONFIG['batch_size'], train_dataset, test_dataset)
+
+    # prepare model
+    if CONFIG['new_vit_model']:
+        model = prepare_vit_model(CONFIG['pretrained_model_name'])
+        print(f"got fresh pretrained model = {CONFIG['pretrained_model_name']}")
+    else:
+        model = torch.load(CONFIG['path_model_to_resume'])  
+        print(f"loaded our trained model = {CONFIG['path_model_to_resume']}")
+
+    model.to(device) 
+    print(f"model cast to device = {model.device}")
+
+    loss_fn = nn.MSELoss(reduction="sum")
+    optimizer = optim.Adam(model.parameters(), lr=CONFIG['init_learning_rate'])
+
+    best_test_accuracy = float("inf")  # to identify best model ever seen
+
+    tb = SummaryWriter()
+
+    for epoch in range(CONFIG['epoch']):
         model.train()
         cache_train = initialize_cache()
 
         # for batch_idx, (data, target_dict) in enumerate(tqdm(train_loader, total=len(train_loader))):
         for batch_idx, (data, target_dict) in enumerate(train_loader):
-            data, target = prepare_data_and_target(data, target_dict)
+            data, target = prepare_data_and_target(data, target_dict, device)
             optimizer.zero_grad()
             output = model(data)[0] 
             loss = calc_loss(loss_fn, output, target)
@@ -197,7 +224,7 @@ def train_model(EPOCH, model, loss_fn, optimizer, train_loader, test_loader,
             loss.backward()
             optimizer.step()
 
-        cache_train = calc_avg_rms(cache_train)
+        cache_train = calc_avg_rms(cache_train, tb)
         print_loss_rms(epoch, 'Train', cache_train)
 
         with torch.no_grad():
@@ -205,60 +232,43 @@ def train_model(EPOCH, model, loss_fn, optimizer, train_loader, test_loader,
             cache_test = initialize_cache()
 
             for batch_idx, (data, target_dict) in enumerate(test_loader):
-                data, target = prepare_data_and_target(data, target_dict)
+                data, target = prepare_data_and_target(data, target_dict, device)
                 pred = model(data)[0]
                 loss = calc_loss(loss_fn, pred, target)
                 cache_test = update_cache(cache_test, pred, target, loss)
 
-                if batch_idx % test_num_batch == 0 and batch_idx != 0:
+                if batch_idx % CONFIG['test_loss_record_every_num_batch'] == 0 and batch_idx != 0:
                     tb.add_scalar('test_loss', loss.item())
                     break
 
-            cache_test = calc_avg_rms(cache_test)
+            cache_test = calc_avg_rms(cache_test, tb)
             print_loss_rms(epoch, 'Test', cache_test)
 
             test_loss_per_batch = cache_test['total_loss'] / cache_test['total_counter']
             if test_loss_per_batch < best_test_accuracy:
                 best_test_accuracy = test_loss_per_batch
                 datetime_today = str(datetime.date.today())
-                model_save_path = f'{dir_model_save}/power_law_pred_vit_{datetime_today}.mdl'
+                model_save_path = f"{CONFIG['dir_model_save']}/power_law_pred_vit_{datetime_today}.mdl"
                 torch.save(model, model_save_path)
                 print(f"save model to {model_save_path}")
+
+    tb.close()
 
 
 
 
 if __name__ == '__main__':
 
-    EPOCH = 2
-    BATCH_SIZE = 16
+    CONFIG = {
+        'epoch': 2,
+        'batch_size': 16,
+        'new_vit_model': True,
+        'pretrained_model_name': "google/vit-base-patch16-224", # for 'new_vit_model' = True
+        'path_model_to_resume': Path(""), # for 'new_vit_model' = False
+        'dataset_folder': Path("C:/Users/abcd2/Downloads/dev_256/"),
+        'dir_model_save': Path("./saved_model"),
+        'init_learning_rate': 1e-4,
+        'test_loss_record_every_num_batch': 50,
+    }
 
-    test_num_batch = 50  #TODO: only for print?
-    best_test_accuracy = float("inf")
-
-    dataset_folder = Path("C:/Users/abcd2/Downloads/dev_256/")  # dir for dataset
-    dir_model_save = Path("./saved_model")  # dir for saving models
-
-    if not os.path.exists(dir_model_save):
-        os.mkdir(dir_model_save)
-
-    train_dataset, test_dataset = get_train_test_datasets(dataset_folder)
-    train_loader, test_loader = get_train_test_dataloaders(BATCH_SIZE, train_dataset, test_dataset)
-
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    print(device)
-
-    model = prepare_vit_model()  
-    # model = torch.load('./saved_model/resmodel18.mdl')  
-    # print('loaded mdl!')
-    model.cuda() 
-
-    loss_fn = nn.MSELoss(reduction="sum")
-    optimizer = optim.Adam(model.parameters(), lr=1e-4)
-
-    tb = SummaryWriter()
-
-    train_model(EPOCH, model, loss_fn, optimizer, train_loader, test_loader, 
-                dir_model_save, best_test_accuracy)
-
-    tb.close()
+    train_model(CONFIG)
