@@ -211,8 +211,7 @@ def train_model(CONFIG):
         model.train()
         cache_train = initialize_cache()
 
-        # for batch_idx, (data, target_dict) in enumerate(tqdm(train_loader, total=len(train_loader))):
-        for batch_idx, (data, target_dict) in enumerate(train_loader):
+        for batch_idx, (data, target_dict) in enumerate(tqdm(train_loader, total=len(train_loader))):
             data, target = prepare_data_and_target(data, target_dict, device)
             optimizer.zero_grad()
             output = model(data)[0] 
