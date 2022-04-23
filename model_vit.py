@@ -33,20 +33,17 @@ class DeepLenstronomyDataset(Dataset):  # torch.utils.data.Dataset
         self.transform = transform
         self.target_transform = target_transform
         self.train = train  # training set or test set
-        # self.train_folder = 'train'#'data_train'
-        # self.test_folder = 'test'#'data_test'
-        self.train_folder = ''#'data_train'
-        self.test_folder = ''#'data_test'
-
+        self.train_folder = 'train'
+        self.test_folder = 'test'
         if self.train:
-            self.path = os.path.join(self.root_dir, self.train_folder)
-            self.df = pd.read_csv(self.path + '/metadata.csv')  #TODO: right csv?
+            self.path = Path(f"{self.root_dir}/{self.train_folder}")
         else:
-            self.path = os.path.join(self.root_dir, self.test_folder)
-            self.df = pd.read_csv(self.path + '/metadata.csv')  #TODO: right csv?
+            self.path = Path(f"{self.root_dir}/{self.test_folder}")
+        self.df = pd.read_csv(Path(f"{self.path}/metadata.csv"))
 
     def __getitem__(self, index):
-        img_path = self.path + self.df['img_path'].values[index][-13:]
+        img_name = self.df['img_path'].values[index][-13:]  #TODO: this is hard coded
+        img_path = Path(f"{self.path}/{img_name}")
         img = np.load(img_path)
         img = scipy.ndimage.zoom(img, 224 / 100, order=1)  #TODO: this is hard coded
         image = np.zeros((3, 224, 224))  #TODO: this is hard coded
