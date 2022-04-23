@@ -1,6 +1,6 @@
 """ Code taken from https://github.com/joshualin24/vit_strong_lensing/blob/master/vit.py 
-    Was originally created by 2022-4-4 neural modelworks by Joshua Yao-Yu Lin
-    Then modified by Kuan-Wei Huang
+    Originally created by 2022-4-4 neural modelworks by Joshua Yao-Yu Lin
+    Modified by Kuan-Wei Huang
 """
 
 
@@ -28,14 +28,14 @@ from transformers import ViTForImageClassification
 
 class DeepLenstronomyDataset(Dataset):  # torch.utils.data.Dataset
     
-    def __init__(self, root_dir, train=True, transform=None, target_transform=None):
+    def __init__(self, root_dir, use_train=True, transform=None, target_transform=None):
         self.root_dir = root_dir
         self.transform = transform
         self.target_transform = target_transform
-        self.train = train  # training set or test set
+        self.use_train = use_train  # training set or test set
         self.train_folder = 'train'
         self.test_folder = 'test'
-        if self.train:
+        if self.use_train:
             self.path = Path(f"{self.root_dir}/{self.train_folder}")
         else:
             self.path = Path(f"{self.root_dir}/{self.test_folder}")
@@ -142,13 +142,13 @@ def get_train_test_datasets(dataset_folder):
 
     train_dataset = DeepLenstronomyDataset(
         dataset_folder, 
-        train=True, 
+        use_train=True, 
         transform=data_transform, 
         target_transform=target_transform,
     )
     test_dataset = DeepLenstronomyDataset(
         dataset_folder, 
-        train=False, 
+        use_train=False, 
         transform=data_transform, 
         target_transform=target_transform,
     )
@@ -245,7 +245,7 @@ def train_model(CONFIG):
             if test_loss_per_batch < best_test_accuracy:
                 best_test_accuracy = test_loss_per_batch
                 datetime_today = str(datetime.date.today())
-                model_save_path = f"{CONFIG['dir_model_save']}/power_law_pred_vit_{datetime_today}.mdl"
+                model_save_path = f"{CONFIG['dir_model_save']}/{CONFIG['model_file_name_prefix']}_{datetime_today}.mdl"
                 torch.save(model, model_save_path)
                 print(f"save model to {model_save_path}")
 
@@ -264,6 +264,7 @@ if __name__ == '__main__':
         'path_model_to_resume': Path(""), # for 'new_vit_model' = False
         'dataset_folder': Path("C:/Users/abcd2/Downloads/dev_256/"),
         'dir_model_save': Path("./saved_model"),
+        'model_file_name_prefix': 'power_law_pred_vit',
         'init_learning_rate': 1e-4,
         'test_loss_record_every_num_batch': 50,
     }
