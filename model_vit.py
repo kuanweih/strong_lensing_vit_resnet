@@ -244,8 +244,8 @@ def train_model(CONFIG):
             test_loss_per_batch = cache_test['total_loss'] / cache_test['total_counter']
             if test_loss_per_batch < best_test_accuracy:
                 best_test_accuracy = test_loss_per_batch
-                datetime_today = str(datetime.date.today())
-                model_save_path = f"{CONFIG['dir_model_save']}/{CONFIG['model_file_name_prefix']}_{datetime_today}.mdl"
+                time_stamp = str(datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S"))
+                model_save_path = f"{CONFIG['dir_model_save']}/{CONFIG['model_file_name_prefix']}_{time_stamp}.mdl"
                 torch.save(model, model_save_path)
                 print(f"save model to {model_save_path}")
 
