@@ -192,6 +192,11 @@ def record_loss_history(history_dict, epoch, batch_idx, loss):
     return history_dict
 
 
+def save_loss_history(CONFIG, history_dict, which):
+    fname = f"{CONFIG['dir_model_save']}/{CONFIG['model_file_name_prefix']}_{which}_loss_history.npy"
+    np.save(fname, history_dict)
+
+
 def train_model(CONFIG):
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -269,9 +274,11 @@ def train_model(CONFIG):
                 model_save_path = f"{_dir}/{_prefix}_{time_stamp}_testloss_{test_loss_per_batch:.4e}.mdl"
                 torch.save(model, model_save_path)
                 print(f"save model to {model_save_path}")
+    
+    for which, history_dict in zip(["train", "test"], [train_loss_history, test_loss_history]):
+        save_loss_history(CONFIG, history_dict, which)
 
-    print(train_loss_history)
-    print(test_loss_history)
+        
 
 
 if __name__ == '__main__':
