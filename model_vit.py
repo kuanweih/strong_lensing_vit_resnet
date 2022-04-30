@@ -177,12 +177,19 @@ def prepare_vit_model(pretrained_model_name):
     return model
 
 
-def initialize_loss_history_dict():
+def initialize_loss_history():
     return {
         'epoch': [],
-        'batch_id': [],
+        'batch_idx': [],
         'loss': [],
     }
+
+
+def record_loss_history(history_dict, epoch, batch_idx, loss):
+    history_dict['epoch'].append(epoch)
+    history_dict['batch_idx'].append(batch_idx)
+    history_dict['loss'].append(loss.item())
+    return history_dict
 
 
 def train_model(CONFIG):
@@ -212,8 +219,8 @@ def train_model(CONFIG):
     optimizer = optim.Adam(model.parameters(), lr=CONFIG['init_learning_rate'])
 
     best_test_accuracy = float("inf")  # to identify best model ever seen
-    # test_loss_history = initialize_loss_history_dict()
-    # train_loss_history = initialize_loss_history_dict()
+    test_loss_history = initialize_loss_history()
+    train_loss_history = initialize_loss_history()
 
     for epoch in range(CONFIG['epoch']):
         model.train()
@@ -228,8 +235,13 @@ def train_model(CONFIG):
             loss.backward()
             optimizer.step()
 
+            if batch_idx % CONFIG['test_loss_record_every_num_batch'] == 0 and batch_idx != 0:
+                train_loss_history = record_loss_history(train_loss_history, epoch, batch_idx, loss)
+
+
         cache_train = calc_avg_rms(cache_train)
         print_loss_rms(epoch, 'Train', cache_train)
+
 
         with torch.no_grad():
             model.eval()
@@ -242,8 +254,8 @@ def train_model(CONFIG):
                 cache_test = update_cache(cache_test, pred, target, loss)
 
                 if batch_idx % CONFIG['test_loss_record_every_num_batch'] == 0 and batch_idx != 0:
-                    #TODO: tb.add_scalar('test_loss', loss.item())
-                    break
+                    test_loss_history = record_loss_history(test_loss_history, epoch, batch_idx, loss)
+                    break  #TODO: wtf is this break?
 
             cache_test = calc_avg_rms(cache_test)
             print_loss_rms(epoch, 'Test', cache_test)
@@ -258,7 +270,8 @@ def train_model(CONFIG):
                 torch.save(model, model_save_path)
                 print(f"save model to {model_save_path}")
 
-
+    print(train_loss_history)
+    print(test_loss_history)
 
 
 if __name__ == '__main__':
