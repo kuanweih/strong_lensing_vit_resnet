@@ -13,7 +13,6 @@ import pandas as pd
 
 from tqdm import tqdm
 from pathlib import Path
-from tensorboardX import SummaryWriter
 
 import torch
 import torch.nn as nn
@@ -91,13 +90,14 @@ def prepare_data_and_target(data, target_dict, device):
     return data, target
 
 
-def calc_avg_rms(cache, tb):
+def calc_avg_rms(cache):
     avg_rms = cache['total_rms'] / cache['total_counter']
     avg_rms = avg_rms.cpu()
     avg_rms = (avg_rms.data).numpy()
     cache['avg_rms'] = avg_rms
-    for i in range(len(avg_rms)):
-        tb.add_scalar(f"rms {i + 1}", avg_rms[i])
+    #TODO
+    # for i in range(len(avg_rms)):
+    #     tb.add_scalar(f"rms {i + 1}", avg_rms[i])
     return cache
     
 
@@ -177,6 +177,14 @@ def prepare_vit_model(pretrained_model_name):
     return model
 
 
+def initialize_loss_history_dict():
+    return {
+        'epoch': [],
+        'batch_id': [],
+        'loss': [],
+    }
+
+
 def train_model(CONFIG):
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -204,8 +212,8 @@ def train_model(CONFIG):
     optimizer = optim.Adam(model.parameters(), lr=CONFIG['init_learning_rate'])
 
     best_test_accuracy = float("inf")  # to identify best model ever seen
-
-    tb = SummaryWriter()
+    # test_loss_history = initialize_loss_history_dict()
+    # train_loss_history = initialize_loss_history_dict()
 
     for epoch in range(CONFIG['epoch']):
         model.train()
@@ -220,7 +228,7 @@ def train_model(CONFIG):
             loss.backward()
             optimizer.step()
 
-        cache_train = calc_avg_rms(cache_train, tb)
+        cache_train = calc_avg_rms(cache_train)
         print_loss_rms(epoch, 'Train', cache_train)
 
         with torch.no_grad():
@@ -234,21 +242,21 @@ def train_model(CONFIG):
                 cache_test = update_cache(cache_test, pred, target, loss)
 
                 if batch_idx % CONFIG['test_loss_record_every_num_batch'] == 0 and batch_idx != 0:
-                    tb.add_scalar('test_loss', loss.item())
+                    #TODO: tb.add_scalar('test_loss', loss.item())
                     break
 
-            cache_test = calc_avg_rms(cache_test, tb)
+            cache_test = calc_avg_rms(cache_test)
             print_loss_rms(epoch, 'Test', cache_test)
 
             test_loss_per_batch = cache_test['total_loss'] / cache_test['total_counter']
             if test_loss_per_batch < best_test_accuracy:
                 best_test_accuracy = test_loss_per_batch
                 time_stamp = str(datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S"))
-                model_save_path = f"{CONFIG['dir_model_save']}/{CONFIG['model_file_name_prefix']}_{time_stamp}.mdl"
+                _dir = CONFIG['dir_model_save']
+                _prefix = CONFIG['model_file_name_prefix']
+                model_save_path = f"{_dir}/{_prefix}_{time_stamp}_testloss_{test_loss_per_batch:.4e}.mdl"
                 torch.save(model, model_save_path)
                 print(f"save model to {model_save_path}")
-
-    tb.close()
 
 
 
@@ -265,7 +273,10 @@ if __name__ == '__main__':
         'dir_model_save': Path("./saved_model"),
         'model_file_name_prefix': 'power_law_pred_vit',
         'init_learning_rate': 1e-4,
-        'test_loss_record_every_num_batch': 50,
+        'test_loss_record_every_num_batch': 2,
     }
 
     train_model(CONFIG)
+
+
+
