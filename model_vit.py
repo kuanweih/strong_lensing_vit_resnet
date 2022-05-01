@@ -27,9 +27,22 @@ from transformers import ViTForImageClassification
 
 
 
-class DeepLenstronomyDataset(Dataset):  # torch.utils.data.Dataset
-    
+class DeepLenstronomyDataset(Dataset):
+    """ The DeepLenstronomyDataset class.
+
+    Args:
+        Dataset: torch.utils.data.Dataset class
+    """
     def __init__(self, target_keys, root_dir, use_train=True, transform=None, target_transform=None):
+        """ Initialize the class.
+
+        Args:
+            target_keys (list): list of targets (Y)
+            root_dir (pathlib.Path object): dir of dataset
+            use_train (bool, optional): True: training set. False: testing set. Defaults to True.
+            transform (torchvision.transforms, optional): transforms for images (X). Defaults to None.
+            target_transform (torchvision.transforms, optional): transforms for targets (Y). Defaults to None.
+        """
         self.target_keys = target_keys
         self.root_dir = root_dir
         self.transform = transform
@@ -69,11 +82,27 @@ class DeepLenstronomyDataset(Dataset):  # torch.utils.data.Dataset
 
 
 def print_n_train_params(model):
+    """ Print number of trainable parameters.
+
+    Args:
+        model (model object): presumably a ViT model
+    """
     n = sum(param.numel() for param in model.parameters() if param.requires_grad)
     print(f"Number of trainable parameters: {n}")
 
 
 def prepare_data_and_target(data, target_dict, device):
+    """ Prepare data (X) and target (Y) for a given batch.
+
+    Args:
+        data (np.array): image (X)
+        target_dict (dict): targets (Y)
+        device (torch.device): cpu or gpu
+
+    Returns:
+        data (torch.Tensor): image (X)
+        target (torch.Tensor): targets(Y)
+    """
     data = Variable(data.float()).to(device)
     for key, val in target_dict.items():
         target_dict[key] = Variable(val.float()).to(device)
@@ -82,6 +111,7 @@ def prepare_data_and_target(data, target_dict, device):
 
 
 def calc_avg_rms(cache):
+    #TODO: clean this up later
     avg_rms = cache['total_rms'] / cache['total_counter']
     avg_rms = avg_rms.cpu()
     avg_rms = (avg_rms.data).numpy()
@@ -93,6 +123,14 @@ def calc_avg_rms(cache):
     
 
 def print_loss_rms(epoch, train_test_str, cache):
+    """ Print loss and rms.
+    TODO: need to understand what the loss actually is
+
+    Args:
+        epoch ([type]): [description]
+        train_test_str ([type]): [description]
+        cache ([type]): [description]
+    """
     loss_per_batch = cache['total_loss'] / cache['total_counter']
     avg_rms_for_print = np.array_str(cache['avg_rms'], precision=4)
     print(f"epoch = {epoch}, {train_test_str}:")
@@ -101,6 +139,18 @@ def print_loss_rms(epoch, train_test_str, cache):
 
 
 def update_cache(cache, pred, target, loss):
+    """ Update cache dict. 
+    TODO: ask Jushoa for details
+
+    Args:
+        cache ([type]): [description]
+        pred ([type]): [description]
+        target ([type]): [description]
+        loss ([type]): [description]
+
+    Returns:
+        [type]: [description]
+    """
     square_diff = pred - target  
     cache['total_rms'] += square_diff.std(dim=0)
     cache['total_loss'] += loss.item()
@@ -109,6 +159,11 @@ def update_cache(cache, pred, target, loss):
 
 
 def initialize_cache():
+    """ Initialize cache dict.
+
+    Returns:
+        cache (dict): initialized cache dict
+    """
     cache = {
         'total_loss': 0.0,
         'total_counter': 0,
@@ -118,6 +173,16 @@ def initialize_cache():
 
 
 def calc_loss(loss_fn, pred, target):
+    """ TODO: Customize loss function.
+
+    Args:
+        loss_fn ([type]): [description]
+        pred ([type]): [description]
+        target ([type]): [description]
+
+    Returns:
+        [type]: [description]
+    """
     loss_theta_E = loss_fn(100*pred[0], 100*target[0])  #TODO: this is hard coded
     loss_others = loss_fn(pred, target)
     loss = loss_theta_E + loss_others
@@ -125,6 +190,15 @@ def calc_loss(loss_fn, pred, target):
 
 
 def get_train_test_datasets(CONFIG):
+    """ Create DeepLenstronomyDataset objects.
+
+    Args:
+        CONFIG (dict): CONFIG
+
+    Returns:
+        train_dataset (DeepLenstronomyDataset): training dataset
+        test_dataset (DeepLenstronomyDataset): testing dataset
+    """
     data_transform = transforms.Compose([
         transforms.ToTensor(), # scale to [0,1] and convert to tensor
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
@@ -152,6 +226,17 @@ def get_train_test_datasets(CONFIG):
 
 
 def get_train_test_dataloaders(batch_size, train_dataset, test_dataset):
+    """ Convert Datasets into DataLoaders.
+
+    Args:
+        batch_size (int): batch size
+        train_dataset (Dataset object): DeepLenstronomyDataset
+        test_dataset (Dataset object): DeepLenstronomyDataset
+
+    Returns:
+        train_loader (DataLoader object): training DataLoader
+        test_loader (DataLoader object): testing DataLoader
+    """
     train_loader = DataLoader(
         train_dataset,
         batch_size=batch_size, 
@@ -166,6 +251,14 @@ def get_train_test_dataloaders(batch_size, train_dataset, test_dataset):
 
 
 def prepare_vit_model(CONFIG):
+    """ Prepare a fresh pretrained ViT model.
+
+    Args:
+        CONFIG (dict): CONFIG
+
+    Returns:
+        model (model object): a ViT model constructed based on CONFIG
+    """
     out_features = len(CONFIG['target_keys'])
     model = ViTForImageClassification.from_pretrained(CONFIG['pretrained_model_name'])
     print_n_train_params(model)
@@ -176,6 +269,11 @@ def prepare_vit_model(CONFIG):
 
 
 def initialize_loss_history():
+    """ Inintialize the loss history dict.
+
+    Returns:
+        (dict): empty loss history dict
+    """
     return {
         'epoch': [],
         'batch_idx': [],
@@ -184,6 +282,17 @@ def initialize_loss_history():
 
 
 def record_loss_history(history_dict, epoch, batch_idx, loss):
+    """ Record loss to the history dict.
+
+    Args:
+        history_dict (dict): dict contains loss info
+        epoch (int): current epoch
+        batch_idx (int): current batch id 
+        loss (): current loss
+
+    Returns:
+        history_dict (dict): the updated history dict
+    """
     history_dict['epoch'].append(epoch)
     history_dict['batch_idx'].append(batch_idx)
     history_dict['loss'].append(loss.item())
@@ -191,12 +300,23 @@ def record_loss_history(history_dict, epoch, batch_idx, loss):
 
 
 def save_loss_history(CONFIG, history_dict, which):
+    """ Save loss history as npy.
+
+    Args:
+        CONFIG (dict): CONFIG
+        history_dict (dict): dict contains loss info
+        which (str): which loss history to be saved. 'train' or 'test'
+    """
     fname = f"{CONFIG['dir_model_save']}/{CONFIG['model_file_name_prefix']}_{which}_loss_history.npy"
     np.save(fname, history_dict)
 
 
 def train_model(CONFIG):
+    """ Train a model based on parameters in CONFIG.
 
+    Args:
+        CONFIG (dict): model configuration dict
+    """
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(f"Use device = {device}\n")
 
