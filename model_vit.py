@@ -238,7 +238,7 @@ def train_model(CONFIG):
             loss.backward()
             optimizer.step()
 
-            if batch_idx % CONFIG['test_loss_record_every_num_batch'] == 0 and batch_idx != 0:
+            if batch_idx % CONFIG['record_loss_every_num_batch'] == 0 and batch_idx != 0:
                 train_loss_history = record_loss_history(train_loss_history, epoch, batch_idx, loss)
 
 
@@ -256,9 +256,8 @@ def train_model(CONFIG):
                 loss = calc_loss(loss_fn, pred, target)
                 cache_test = update_cache(cache_test, pred, target, loss)
 
-                if batch_idx % CONFIG['test_loss_record_every_num_batch'] == 0 and batch_idx != 0:
+                if batch_idx % CONFIG['record_loss_every_num_batch'] == 0 and batch_idx != 0:
                     test_loss_history = record_loss_history(test_loss_history, epoch, batch_idx, loss)
-                    break  #TODO: wtf is this break?
 
             cache_test = calc_avg_rms(cache_test)
             print_loss_rms(epoch, 'Test', cache_test)
@@ -291,7 +290,7 @@ if __name__ == '__main__':
         'dir_model_save': Path("./saved_model"),
         'model_file_name_prefix': 'power_law_pred_vit',
         'init_learning_rate': 1e-4,
-        'test_loss_record_every_num_batch': 2,
+        'record_loss_every_num_batch': 2,
         'target_keys': [
             "theta_E", 
             "gamma", 
