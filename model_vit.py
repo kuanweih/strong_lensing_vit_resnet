@@ -32,17 +32,14 @@ class DeepLenstronomyDataset(Dataset):  # torch.utils.data.Dataset
         self.transform = transform
         self.target_transform = target_transform
         self.use_train = use_train  # training set or test set
-        self.train_folder = 'train'
-        self.test_folder = 'test'
         if self.use_train:
-            self.path = Path(f"{self.root_dir}/{self.train_folder}")
+            self.df = pd.read_csv(Path(f"{self.root_dir}/metadata_train.csv"))
         else:
-            self.path = Path(f"{self.root_dir}/{self.test_folder}")
-        self.df = pd.read_csv(Path(f"{self.path}/metadata.csv"))
+            self.df = pd.read_csv(Path(f"{self.root_dir}/metadata_test.csv"))
 
     def __getitem__(self, index):
         img_name = self.df['img_path'].values[index][-13:]  #TODO: this is hard coded
-        img_path = Path(f"{self.path}/{img_name}")
+        img_path = Path(f"{self.root_dir}/{img_name}")
         img = np.load(img_path)
         img = scipy.ndimage.zoom(img, 224 / 100, order=1)  #TODO: this is hard coded
         image = np.zeros((3, 224, 224))  #TODO: this is hard coded
@@ -60,8 +57,8 @@ class DeepLenstronomyDataset(Dataset):  # torch.utils.data.Dataset
             "source_y", 
             "gamma_ext", 
             "psi_ext", 
-            "source_R_sersic", 
-            "source_n_sersic", 
+            "source_R_sersic",
+            "source_n_sersic",
             "sersic_source_e1", 
             "sersic_source_e2", 
             "lens_light_e1", 
@@ -152,6 +149,8 @@ def get_train_test_datasets(dataset_folder):
         transform=data_transform, 
         target_transform=target_transform,
     )
+    print("Number of train samples =", train_dataset.__len__())
+    print("Number of test samples =", test_dataset.__len__())
     return train_dataset, test_dataset
 
 
@@ -289,7 +288,7 @@ if __name__ == '__main__':
         'new_vit_model': True,
         'pretrained_model_name': "google/vit-base-patch16-224", # for 'new_vit_model' = True
         'path_model_to_resume': Path(""), # for 'new_vit_model' = False
-        'dataset_folder': Path("C:/Users/abcd2/Downloads/dev_256/"),
+        'dataset_folder': Path("C:/Users/abcd2/Datasets/2022_icml_lens_sim/dev_256"),
         'dir_model_save': Path("./saved_model"),
         'model_file_name_prefix': 'power_law_pred_vit',
         'init_learning_rate': 1e-4,
