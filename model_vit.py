@@ -25,9 +25,12 @@ from torch.utils.data import Dataset, DataLoader
 from transformers import ViTForImageClassification
 
 
+
+
 class DeepLenstronomyDataset(Dataset):  # torch.utils.data.Dataset
     
-    def __init__(self, root_dir, use_train=True, transform=None, target_transform=None):
+    def __init__(self, target_keys, root_dir, use_train=True, transform=None, target_transform=None):
+        self.target_keys = target_keys
         self.root_dir = root_dir
         self.transform = transform
         self.target_transform = target_transform
@@ -43,36 +46,23 @@ class DeepLenstronomyDataset(Dataset):  # torch.utils.data.Dataset
         else:
             img_name = self.df['img_path'].values[index][-13:]
             print("img_name does not exist in meta csv so hard code by img_path instead.")
+        
         img_path = Path(f"{self.root_dir}/{img_name}")
         img = np.load(img_path)
-        img = scipy.ndimage.zoom(img, 224 / 100, order=1)  #TODO: this is hard coded
-        image = np.zeros((3, 224, 224))  #TODO: this is hard coded
-        for i in range(3):
+
+        ori_img_pixel = img.shape[0]
+        image_channel = 3
+        image_pixel = 224
+
+        img = scipy.ndimage.zoom(img, image_pixel / ori_img_pixel, order=1)
+        image = np.zeros((image_channel, image_pixel, image_pixel))
+
+        for i in range(image_channel):
             image[i, :, :] += img
 
-        target_keys = [
-            "theta_E", 
-            "gamma", 
-            "center_x", 
-            "center_y", 
-            "e1", 
-            "e2", 
-            "source_x", 
-            "source_y", 
-            "gamma_ext", 
-            "psi_ext", 
-            "source_R_sersic",
-            "source_n_sersic",
-            "sersic_source_e1", 
-            "sersic_source_e2", 
-            "lens_light_e1", 
-            "lens_light_e2", 
-            "lens_light_R_sersic", 
-            "lens_light_n_sersic",
-        ]
-        target_res = {key: self.df[key].iloc[[index]].values for key in target_keys}
+        target_dict = {key: self.df[key].iloc[[index]].values for key in self.target_keys}
 
-        return image, target_res
+        return image, target_dict
         
     def __len__(self):
         return self.df.shape[0]
@@ -134,7 +124,7 @@ def calc_loss(loss_fn, pred, target):
     return loss
 
 
-def get_train_test_datasets(dataset_folder):
+def get_train_test_datasets(CONFIG):
     data_transform = transforms.Compose([
         transforms.ToTensor(), # scale to [0,1] and convert to tensor
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
@@ -142,13 +132,15 @@ def get_train_test_datasets(dataset_folder):
     target_transform = torch.Tensor
 
     train_dataset = DeepLenstronomyDataset(
-        dataset_folder, 
+        CONFIG['target_keys'],
+        CONFIG['dataset_folder'], 
         use_train=True, 
         transform=data_transform, 
         target_transform=target_transform,
     )
     test_dataset = DeepLenstronomyDataset(
-        dataset_folder, 
+        CONFIG['target_keys'],
+        CONFIG['dataset_folder'], 
         use_train=False, 
         transform=data_transform, 
         target_transform=target_transform,
@@ -173,10 +165,11 @@ def get_train_test_dataloaders(batch_size, train_dataset, test_dataset):
     return train_loader, test_loader
 
 
-def prepare_vit_model(pretrained_model_name):
-    model = ViTForImageClassification.from_pretrained(pretrained_model_name)
+def prepare_vit_model(CONFIG):
+    out_features = len(CONFIG['target_keys'])
+    model = ViTForImageClassification.from_pretrained(CONFIG['pretrained_model_name'])
     print_n_train_params(model)
-    model.classifier = nn.Linear(in_features=768, out_features=18, bias=True)
+    model.classifier = nn.Linear(in_features=768, out_features=out_features, bias=True)
     print_n_train_params(model)
     print(" ")
     return model
@@ -211,12 +204,12 @@ def train_model(CONFIG):
         os.mkdir(CONFIG['dir_model_save'])
 
     # prepare data loaders
-    train_dataset, test_dataset = get_train_test_datasets(CONFIG['dataset_folder'])
+    train_dataset, test_dataset = get_train_test_datasets(CONFIG)
     train_loader, test_loader = get_train_test_dataloaders(CONFIG['batch_size'], train_dataset, test_dataset)
 
     # prepare model
     if CONFIG['new_vit_model']:
-        model = prepare_vit_model(CONFIG['pretrained_model_name'])
+        model = prepare_vit_model(CONFIG)
         print(f"Use fresh pretrained model = {CONFIG['pretrained_model_name']}\n")
     else:
         model = torch.load(CONFIG['path_model_to_resume'])  
@@ -299,6 +292,18 @@ if __name__ == '__main__':
         'model_file_name_prefix': 'power_law_pred_vit',
         'init_learning_rate': 1e-4,
         'test_loss_record_every_num_batch': 2,
+        'target_keys': [
+            "theta_E", 
+            "gamma", 
+            "center_x", 
+            "center_y", 
+            "e1", 
+            "e2", 
+            "gamma_ext", 
+            "psi_ext", 
+            "lens_light_R_sersic", 
+            "lens_light_n_sersic",
+        ]
     }
 
     train_model(CONFIG)
