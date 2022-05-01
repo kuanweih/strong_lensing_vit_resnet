@@ -38,7 +38,11 @@ class DeepLenstronomyDataset(Dataset):  # torch.utils.data.Dataset
             self.df = pd.read_csv(Path(f"{self.root_dir}/metadata_test.csv"))
 
     def __getitem__(self, index):
-        img_name = self.df['img_path'].values[index][-13:]  #TODO: this is hard coded
+        if "img_name" in self.df.keys():
+            img_name = self.df['img_name'].values[index]
+        else:
+            img_name = self.df['img_path'].values[index][-13:]
+            print("img_name does not exist in meta csv so hard code by img_path instead.")
         img_path = Path(f"{self.root_dir}/{img_name}")
         img = np.load(img_path)
         img = scipy.ndimage.zoom(img, 224 / 100, order=1)  #TODO: this is hard coded
@@ -151,6 +155,7 @@ def get_train_test_datasets(dataset_folder):
     )
     print("Number of train samples =", train_dataset.__len__())
     print("Number of test samples =", test_dataset.__len__())
+    print(" ")
     return train_dataset, test_dataset
 
 
@@ -173,6 +178,7 @@ def prepare_vit_model(pretrained_model_name):
     print_n_train_params(model)
     model.classifier = nn.Linear(in_features=768, out_features=18, bias=True)
     print_n_train_params(model)
+    print(" ")
     return model
 
 
@@ -199,7 +205,7 @@ def save_loss_history(CONFIG, history_dict, which):
 def train_model(CONFIG):
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    print(f"use device = {device}")
+    print(f"Use device = {device}\n")
 
     if not os.path.exists(CONFIG['dir_model_save']):
         os.mkdir(CONFIG['dir_model_save'])
@@ -211,13 +217,13 @@ def train_model(CONFIG):
     # prepare model
     if CONFIG['new_vit_model']:
         model = prepare_vit_model(CONFIG['pretrained_model_name'])
-        print(f"got fresh pretrained model = {CONFIG['pretrained_model_name']}")
+        print(f"Use fresh pretrained model = {CONFIG['pretrained_model_name']}\n")
     else:
         model = torch.load(CONFIG['path_model_to_resume'])  
-        print(f"loaded our trained model = {CONFIG['path_model_to_resume']}")
+        print(f"Use our trained model = {CONFIG['path_model_to_resume']}\n")
 
     model.to(device) 
-    print(f"model cast to device = {model.device}")
+    print(f"Model cast to device = {model.device}\n")
 
     loss_fn = nn.MSELoss(reduction="sum")
     optimizer = optim.Adam(model.parameters(), lr=CONFIG['init_learning_rate'])
@@ -272,7 +278,7 @@ def train_model(CONFIG):
                 _prefix = CONFIG['model_file_name_prefix']
                 model_save_path = f"{_dir}/{_prefix}_{time_stamp}_testloss_{test_loss_per_batch:.4e}.mdl"
                 torch.save(model, model_save_path)
-                print(f"save model to {model_save_path}")
+                print(f"\nSave model to {model_save_path}\n")
     
     for which, history_dict in zip(["train", "test"], [train_loss_history, test_loss_history]):
         save_loss_history(CONFIG, history_dict, which)
