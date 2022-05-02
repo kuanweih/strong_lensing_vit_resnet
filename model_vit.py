@@ -183,7 +183,7 @@ def calc_loss(loss_fn, pred, target):
     Returns:
         [type]: [description]
     """
-    loss_theta_E = loss_fn(100*pred[0], 100*target[0])  #TODO: this is hard coded
+    loss_theta_E = loss_fn(9*pred[0], 9*target[0])  #TODO: this is hard coded
     loss_others = loss_fn(pred, target)
     loss = loss_theta_E + loss_others
     return loss
@@ -392,8 +392,8 @@ def train_model(CONFIG):
                 torch.save(model, model_save_path)
                 print(f"\nSave model to {model_save_path}\n")
     
-    for which, history_dict in zip(["train", "test"], [train_loss_history, test_loss_history]):
-        save_loss_history(CONFIG, history_dict, which)
+        for which, history_dict in zip(["train", "test"], [train_loss_history, test_loss_history]):
+            save_loss_history(CONFIG, history_dict, which)
 
         
 
