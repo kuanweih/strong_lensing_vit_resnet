@@ -309,6 +309,16 @@ def prepare_vit_model(CONFIG):
     return model
 
 
+def init_model(CONFIG):
+    if CONFIG['new_vit_model']:
+        model = prepare_vit_model(CONFIG)
+        print(f"Use fresh pretrained model = {CONFIG['pretrained_model_name']}\n")
+    else:
+        model = torch.load(CONFIG['path_model_to_resume'])  
+        print(f"Use our trained model = {CONFIG['path_model_to_resume']}\n")
+    return model
+
+
 def save_config(CONFIG):
     fname = f"{CONFIG['dir_model_save']}/{CONFIG['model_file_name_prefix']}_CONFIG.npy"
     np.save(fname, CONFIG)
@@ -341,12 +351,7 @@ def train_model(CONFIG):
     train_loader, test_loader = get_train_test_dataloaders(CONFIG['batch_size'], train_dataset, test_dataset)
 
     # prepare model
-    if CONFIG['new_vit_model']:
-        model = prepare_vit_model(CONFIG)
-        print(f"Use fresh pretrained model = {CONFIG['pretrained_model_name']}\n")
-    else:
-        model = torch.load(CONFIG['path_model_to_resume'])  
-        print(f"Use our trained model = {CONFIG['path_model_to_resume']}\n")
+    model = init_model(CONFIG)
 
     model.to(device) 
     print(f"Model cast to device = {model.device}\n")
