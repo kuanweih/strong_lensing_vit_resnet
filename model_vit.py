@@ -110,66 +110,61 @@ def prepare_data_and_target(data, target_dict, device):
     return data, target
 
 
-def calc_avg_rms(cache):
-    #TODO: clean this up later
-    avg_rms = cache['total_rms'] / cache['total_counter']
-    avg_rms = avg_rms.cpu()
-    avg_rms = (avg_rms.data).numpy()
-    cache['avg_rms'] = avg_rms
-    #TODO
-    # for i in range(len(avg_rms)):
-    #     tb.add_scalar(f"rms {i + 1}", avg_rms[i])
-    return cache
+
+
+
+
+class CacheEpoch:
+
+    def __init__(self):
+        """ Initialize cache dict.
+
+        Returns:
+            cache (dict): initialized cache dict
+        """
+        self.total_loss = 0.0
+        self.total_counter = 0
+        self.total_rms = 0
+
+    def update_cache(self, pred, target, loss):
+        """ Update cache dict.
+
+        Args:
+            cache ([type]): [description]
+            pred ([type]): [description]
+            target ([type]): [description]
+            loss ([type]): [description]
+        """
+        square_diff = pred - target  
+        # print(square_diff.shape)
+        self.total_rms += square_diff.std(dim=0)
+        # print(cache['total_rms'].shape)
+        self.total_loss += loss.item()
+        self.total_counter += 1
+
+    def calc_avg_rms(self):
+        #TODO: clean this up later
+        avg_rms = self.total_rms / self.total_counter
+        avg_rms = avg_rms.cpu()
+        avg_rms = (avg_rms.data).numpy()
+        self.avg_rms = avg_rms
     
+    def print_loss_rms(self, epoch, train_test_str):
+        """ Print loss and rms.
 
-def print_loss_rms(epoch, train_test_str, cache):
-    """ Print loss and rms.
-    TODO: need to understand what the loss actually is
-
-    Args:
-        epoch ([type]): [description]
-        train_test_str ([type]): [description]
-        cache ([type]): [description]
-    """
-    loss_per_batch = cache['total_loss'] / cache['total_counter']
-    avg_rms_for_print = np.array_str(cache['avg_rms'], precision=4)
-    print(f"epoch = {epoch}, {train_test_str}:")
-    print(f"    loss (average per batch wise) = {loss_per_batch:.4e}")
-    print(f"    RMS (average per batch wise) = {avg_rms_for_print}")
+        Args:
+            epoch ([type]): [description]
+            train_test_str ([type]): [description]
+            cache ([type]): [description]
+        """
+        loss_per_batch = self.total_loss / self.total_counter
+        avg_rms_for_print = np.array_str(self.avg_rms, precision=4)
+        print(f"epoch = {epoch}, {train_test_str}:")
+        print(f"    loss (average per batch wise) = {loss_per_batch:.4e}")
+        print(f"    RMS (average per batch wise) = {avg_rms_for_print}")
 
 
-def update_cache(cache, pred, target, loss):
-    """ Update cache dict. 
-    TODO: ask Jushoa for details
 
-    Args:
-        cache ([type]): [description]
-        pred ([type]): [description]
-        target ([type]): [description]
-        loss ([type]): [description]
-
-    Returns:
-        [type]: [description]
-    """
-    square_diff = pred - target  
-    cache['total_rms'] += square_diff.std(dim=0)
-    cache['total_loss'] += loss.item()
-    cache['total_counter'] += 1
-    return cache
-
-
-def initialize_cache():
-    """ Initialize cache dict.
-
-    Returns:
-        cache (dict): initialized cache dict
-    """
-    cache = {
-        'total_loss': 0.0,
-        'total_counter': 0,
-        'total_rms': 0,
-    }
-    return cache
 
 
 def calc_loss(pred, target, CONFIG, device):
@@ -373,14 +368,16 @@ def train_model(CONFIG):
 
     for epoch in range(CONFIG['epoch']):
         model.train()
-        cache_train = initialize_cache()
+        cache_train = CacheEpoch()
 
         for batch_idx, (data, target_dict) in enumerate(tqdm(train_loader, total=len(train_loader))):
             data, target = prepare_data_and_target(data, target_dict, device)
             optimizer.zero_grad()
             output = model(data)[0] 
             loss = calc_loss(output, target, CONFIG, device)
-            cache_train = update_cache(cache_train, output, target, loss)
+
+            cache_train.update_cache(output, target, loss)
+
             loss.backward()
             optimizer.step()
 
@@ -388,27 +385,28 @@ def train_model(CONFIG):
                 train_loss_history = record_loss_history(train_loss_history, epoch, batch_idx, loss)
 
 
-        cache_train = calc_avg_rms(cache_train)
-        print_loss_rms(epoch, 'Train', cache_train)
+        cache_train.calc_avg_rms()
+        cache_train.print_loss_rms(epoch, 'Train')
 
 
         with torch.no_grad():
             model.eval()
-            cache_test = initialize_cache()
+            cache_test = CacheEpoch()
 
             for batch_idx, (data, target_dict) in enumerate(test_loader):
                 data, target = prepare_data_and_target(data, target_dict, device)
                 pred = model(data)[0]
                 loss = calc_loss(pred, target, CONFIG, device)
-                cache_test = update_cache(cache_test, pred, target, loss)
+
+                cache_test.update_cache(pred, target, loss)
 
                 if batch_idx % CONFIG['record_loss_every_num_batch'] == 0 and batch_idx != 0:
                     test_loss_history = record_loss_history(test_loss_history, epoch, batch_idx, loss)
 
-            cache_test = calc_avg_rms(cache_test)
-            print_loss_rms(epoch, 'Test', cache_test)
+            cache_test.calc_avg_rms()
+            cache_test.print_loss_rms(epoch, 'Test')
 
-            test_loss_per_batch = cache_test['total_loss'] / cache_test['total_counter']
+            test_loss_per_batch = cache_test.total_loss / cache_test.total_counter
             if test_loss_per_batch < best_test_accuracy:
                 best_test_accuracy = test_loss_per_batch
                 _dir = CONFIG['dir_model_save']
@@ -427,7 +425,7 @@ if __name__ == '__main__':
 
     CONFIG = {
         'epoch': 2,
-        'batch_size': 32,
+        'batch_size': 30,
         'new_vit_model': True,
         'pretrained_model_name': "google/vit-base-patch16-224", # for 'new_vit_model' = True
         'path_model_to_resume': Path(""), # for 'new_vit_model' = False
