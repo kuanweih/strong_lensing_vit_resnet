@@ -5,7 +5,6 @@
 
 
 import os
-import datetime
 import scipy.ndimage
 
 import numpy as np
@@ -385,10 +384,9 @@ def train_model(CONFIG):
             test_loss_per_batch = cache_test['total_loss'] / cache_test['total_counter']
             if test_loss_per_batch < best_test_accuracy:
                 best_test_accuracy = test_loss_per_batch
-                time_stamp = str(datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S"))
                 _dir = CONFIG['dir_model_save']
                 _prefix = CONFIG['model_file_name_prefix']
-                model_save_path = f"{_dir}/{_prefix}_{time_stamp}_testloss_{test_loss_per_batch:.4e}.mdl"
+                model_save_path = f"{_dir}/{_prefix}_epoch_{epoch}_testloss_{test_loss_per_batch:.4e}.mdl"
                 torch.save(model, model_save_path)
                 print(f"\nSave model to {model_save_path}\n")
     
@@ -405,13 +403,13 @@ if __name__ == '__main__':
 
     CONFIG = {
         'epoch': 2,
-        'batch_size': 16,
+        'batch_size': 32,
         'new_vit_model': True,
         'pretrained_model_name': "google/vit-base-patch16-224", # for 'new_vit_model' = True
         'path_model_to_resume': Path(""), # for 'new_vit_model' = False
         'dataset_folder': Path("C:/Users/abcd2/Datasets/2022_icml_lens_sim/dev_256"),
-        'dir_model_save': Path("./saved_model"),
-        'model_file_name_prefix': 'power_law_pred_vit',
+        'dir_model_save': Path("C:/Users/abcd2/Downloads/tmp_dev_outputs"),
+        'model_file_name_prefix': 'vit_dev',
         'init_learning_rate': 1e-4,
         'record_loss_every_num_batch': 2,
         'target_keys': [
