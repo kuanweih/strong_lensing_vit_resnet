@@ -173,8 +173,22 @@ def initialize_cache():
 
 
 def calc_loss(pred, target, CONFIG, device):
-    """ Weighted mean squared loss.
+    """ Average weighted mean squared loss per sample.
 
+    Let 
+        i = range(0, B): sample index in a batch with size B
+        j = range(0, T): target index for T targets
+        pred_(i, j): prediction for target j and sample i
+        truth_(i, j): target for target j and sample i
+        SE_(i, j): squared error for target j and sample i
+        MSE_j: mean squared error for target j per sample
+        w_j: weight for target j
+        W = sum(w_j for j in range(T)): total weight
+
+    SE_(i, j) = (pred_(i, j) - truth_(i, j))**2
+    MSE_j = sum(SE_(i, j) for i in range(B)) / B
+    Loss = sum(w_j * MSE_j for j in range(T)) / W
+    
     Args:
         pred (torch.Tensor): prediction of a batch
         target (torch.Tensor): target of a batch
@@ -182,7 +196,7 @@ def calc_loss(pred, target, CONFIG, device):
         device (torch.device): cpu or gpu
 
     Returns:
-        [torch.Tensor]: loss
+        [torch.Tensor]: Loss
     """
     weight = [w for _, w in CONFIG["target_keys_weights"].items()]
     weight = torch.tensor(weight, requires_grad=False).to(device)
