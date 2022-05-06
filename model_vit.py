@@ -112,6 +112,12 @@ def prepare_data_and_target(data, target_dict, device):
 
 
 
+class CacheHistory:
+
+    def __init__(self, cache_epoch):
+        self.cache_epoch = cache_epoch
+
+
 
 
 class CacheEpoch:
@@ -122,33 +128,34 @@ class CacheEpoch:
         Returns:
             cache (dict): initialized cache dict
         """
-        self.total_loss = 0.0
-        self.total_counter = 0
-        self.total_rms = 0
+        self._cnt = 0
+        self._cum_loss = 0.0
+        self._cum_err_mean = 0
+        self._cum_err_std = 0
+
+        self.avg_loss = 0.0
+        self.avg_err_mean = 0
+        self.avg_err_std = 0
 
     def update_cache(self, pred, target, loss):
         """ Update cache dict.
 
         Args:
-            cache ([type]): [description]
             pred ([type]): [description]
             target ([type]): [description]
             loss ([type]): [description]
         """
-        square_diff = pred - target  
-        # print(square_diff.shape)
-        self.total_rms += square_diff.std(dim=0)
-        # print(cache['total_rms'].shape)
-        self.total_loss += loss.item()
-        self.total_counter += 1
+        err = (pred - target).cpu().detach().numpy()
+        self._cum_err_mean += err.mean(axis=0)
+        self._cum_err_std += err.std(axis=0)
+        self._cum_loss += loss.item()
+        self._cnt += 1
 
-    def calc_avg_rms(self):
-        #TODO: clean this up later
-        avg_rms = self.total_rms / self.total_counter
-        avg_rms = avg_rms.cpu()
-        avg_rms = (avg_rms.data).numpy()
-        self.avg_rms = avg_rms
-    
+    def calc_avg_across_batches(self):
+        self.avg_err_mean = self._cum_err_mean / self._cnt
+        self.avg_err_std = self._cum_err_std / self._cnt
+        self.avg_loss = self._cum_loss / self._cnt
+
     def print_loss_rms(self, epoch, train_test_str):
         """ Print loss and rms.
 
@@ -157,14 +164,12 @@ class CacheEpoch:
             train_test_str ([type]): [description]
             cache ([type]): [description]
         """
-        loss_per_batch = self.total_loss / self.total_counter
-        avg_rms_for_print = np.array_str(self.avg_rms, precision=4)
+        avg_err_mean_print = np.array_str(self.avg_err_mean, precision=4)
+        avg_err_std_print = np.array_str(self.avg_err_std, precision=4)
         print(f"epoch = {epoch}, {train_test_str}:")
-        print(f"    loss (average per batch wise) = {loss_per_batch:.4e}")
-        print(f"    RMS (average per batch wise) = {avg_rms_for_print}")
-
-
-
+        print(f"    loss (average over epoch) = {self.avg_loss:.4f}")
+        print(f"    err_mean (average over epoch) = {avg_err_mean_print}")
+        print(f"    err_std (average over epoch) = {avg_err_std_print}")
 
 
 def calc_loss(pred, target, CONFIG, device):
@@ -366,8 +371,11 @@ def train_model(CONFIG):
     test_loss_history = initialize_loss_history()
     train_loss_history = initialize_loss_history()
 
+
+
     for epoch in range(CONFIG['epoch']):
         model.train()
+
         cache_train = CacheEpoch()
 
         for batch_idx, (data, target_dict) in enumerate(tqdm(train_loader, total=len(train_loader))):
@@ -385,7 +393,7 @@ def train_model(CONFIG):
                 train_loss_history = record_loss_history(train_loss_history, epoch, batch_idx, loss)
 
 
-        cache_train.calc_avg_rms()
+        cache_train.calc_avg_across_batches()
         cache_train.print_loss_rms(epoch, 'Train')
 
 
@@ -403,15 +411,17 @@ def train_model(CONFIG):
                 if batch_idx % CONFIG['record_loss_every_num_batch'] == 0 and batch_idx != 0:
                     test_loss_history = record_loss_history(test_loss_history, epoch, batch_idx, loss)
 
-            cache_test.calc_avg_rms()
+            cache_test.calc_avg_across_batches()
             cache_test.print_loss_rms(epoch, 'Test')
 
-            test_loss_per_batch = cache_test.total_loss / cache_test.total_counter
+
+            # TODO: get test from history instead of cache
+            test_loss_per_batch = cache_test.avg_loss
             if test_loss_per_batch < best_test_accuracy:
                 best_test_accuracy = test_loss_per_batch
                 _dir = CONFIG['dir_model_save']
                 _prefix = CONFIG['model_file_name_prefix']
-                model_save_path = f"{_dir}/{_prefix}_epoch_{epoch}_testloss_{test_loss_per_batch:.4e}.mdl"
+                model_save_path = f"{_dir}/{_prefix}_epoch_{epoch}_testloss_{test_loss_per_batch:.6f}.mdl"
                 torch.save(model, model_save_path)
                 print(f"\nSave model to {model_save_path}\n")
     
