@@ -33,7 +33,7 @@ class DeepLenstronomyDataset(Dataset):
     Args:
         Dataset: torch.utils.data.Dataset class
     """
-    def __init__(self, target_keys, root_dir, use_train=True, transform=None, target_transform=None):
+    def __init__(self, target_keys_weights, root_dir, use_train=True, transform=None, target_transform=None):
         """ Initialize the class.
 
         Args:
@@ -43,7 +43,7 @@ class DeepLenstronomyDataset(Dataset):
             transform (torchvision.transforms, optional): transforms for images (X). Defaults to None.
             target_transform (torchvision.transforms, optional): transforms for targets (Y). Defaults to None.
         """
-        self.target_keys = target_keys
+        self.target_keys_weights = target_keys_weights
         self.root_dir = root_dir
         self.transform = transform
         self.target_transform = target_transform
@@ -73,7 +73,7 @@ class DeepLenstronomyDataset(Dataset):
         for i in range(image_channel):
             image[i, :, :] += img
 
-        target_dict = {key: self.df[key].iloc[[index]].values for key in self.target_keys}
+        target_dict = {key: self.df[key].iloc[[index]].values for key in self.target_keys_weights}
 
         return image, target_dict
         
@@ -209,14 +209,14 @@ def get_train_test_datasets(CONFIG):
     target_transform = torch.Tensor
 
     train_dataset = DeepLenstronomyDataset(
-        CONFIG['target_keys'],
+        CONFIG['target_keys_weights'],
         CONFIG['dataset_folder'], 
         use_train=True, 
         transform=data_transform, 
         target_transform=target_transform,
     )
     test_dataset = DeepLenstronomyDataset(
-        CONFIG['target_keys'],
+        CONFIG['target_keys_weights'],
         CONFIG['dataset_folder'], 
         use_train=False, 
         transform=data_transform, 
@@ -262,7 +262,7 @@ def prepare_vit_model(CONFIG):
     Returns:
         model (model object): a ViT model constructed based on CONFIG
     """
-    out_features = len(CONFIG['target_keys'])
+    out_features = len(CONFIG['target_keys_weights'])
     model = ViTForImageClassification.from_pretrained(CONFIG['pretrained_model_name'])
     print_n_train_params(model)
     model.classifier = nn.Linear(in_features=768, out_features=out_features, bias=True)
@@ -427,18 +427,18 @@ if __name__ == '__main__':
         'model_file_name_prefix': 'vit_dev',
         'init_learning_rate': 1e-4,
         'record_loss_every_num_batch': 2,
-        'target_keys': [
-            "theta_E", 
-            "gamma", 
-            "center_x", 
-            "center_y", 
-            "e1", 
-            "e2", 
-            "gamma_ext", 
-            "psi_ext", 
-            "lens_light_R_sersic", 
-            "lens_light_n_sersic",
-        ]
+        'target_keys_weights': {
+            "theta_E": 10, 
+            "gamma": 1, 
+            "center_x": 1, 
+            "center_y": 1, 
+            "e1": 1, 
+            "e2": 1, 
+            "gamma_ext": 1, 
+            "psi_ext": 1, 
+            "lens_light_R_sersic": 1, 
+            "lens_light_n_sersic": 1,
+        }
     }
 
     train_model(CONFIG)
