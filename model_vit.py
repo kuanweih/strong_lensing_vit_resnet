@@ -172,21 +172,20 @@ def initialize_cache():
     return cache
 
 
-def calc_loss(pred, target):
-    """ TODO: Customize loss function.
+def calc_loss(pred, target, CONFIG, device):
+    """ Weighted mean squared loss.
 
     Args:
-        loss_fn ([type]): [description]
-        pred ([type]): [description]
-        target ([type]): [description]
+        pred (torch.Tensor): prediction of a batch
+        target (torch.Tensor): target of a batch
+        CONFIG (dict): CONFIG
+        device (torch.device): cpu or gpu
 
     Returns:
-        [type]: [description]
+        [torch.Tensor]: loss
     """
-
-    # TODO: update weight using self.target_keys
-    weight = torch.tensor([10, 1, 1, 1, 1, 1, 1, 1, 1, 1], requires_grad=False).cuda()
-
+    weight = [w for _, w in CONFIG["target_keys_weights"].items()]
+    weight = torch.tensor(weight, requires_grad=False).to(device)
     loss = torch.mean((pred - target)**2, axis=0)
     loss = torch.sum(weight * loss) / weight.sum()
     return loss
@@ -366,11 +365,7 @@ def train_model(CONFIG):
             data, target = prepare_data_and_target(data, target_dict, device)
             optimizer.zero_grad()
             output = model(data)[0] 
-
-
-            loss = calc_loss(output, target)
-
-
+            loss = calc_loss(output, target, CONFIG, device)
             cache_train = update_cache(cache_train, output, target, loss)
             loss.backward()
             optimizer.step()
@@ -390,7 +385,7 @@ def train_model(CONFIG):
             for batch_idx, (data, target_dict) in enumerate(test_loader):
                 data, target = prepare_data_and_target(data, target_dict, device)
                 pred = model(data)[0]
-                loss = calc_loss(pred, target)
+                loss = calc_loss(pred, target, CONFIG, device)
                 cache_test = update_cache(cache_test, pred, target, loss)
 
                 if batch_idx % CONFIG['record_loss_every_num_batch'] == 0 and batch_idx != 0:
