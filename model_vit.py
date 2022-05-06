@@ -395,6 +395,9 @@ def train_model(CONFIG):
         for which, history_dict in zip(["train", "test"], [train_loss_history, test_loss_history]):
             save_loss_history(CONFIG, history_dict, which)
 
+        fname = f"{CONFIG['dir_model_save']}/{CONFIG['model_file_name_prefix']}_CONFIG.npy"
+        np.save(fname, CONFIG)
+
         
 
 
