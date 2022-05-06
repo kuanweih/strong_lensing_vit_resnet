@@ -5,6 +5,7 @@
 
 
 import os
+from matplotlib.pyplot import axis
 import scipy.ndimage
 
 import numpy as np
@@ -171,7 +172,7 @@ def initialize_cache():
     return cache
 
 
-def calc_loss(loss_fn, pred, target):
+def calc_loss(pred, target):
     """ TODO: Customize loss function.
 
     Args:
@@ -182,9 +183,12 @@ def calc_loss(loss_fn, pred, target):
     Returns:
         [type]: [description]
     """
-    loss_theta_E = loss_fn(9*pred[0], 9*target[0])  #TODO: this is hard coded
-    loss_others = loss_fn(pred, target)
-    loss = loss_theta_E + loss_others
+
+    # TODO: update weight using self.target_keys
+    weight = torch.tensor([10, 1, 1, 1, 1, 1, 1, 1, 1, 1], requires_grad=False).cuda()
+
+    loss = torch.mean((pred - target)**2, axis=0)
+    loss = torch.sum(weight * loss) / weight.sum()
     return loss
 
 
@@ -309,6 +313,10 @@ def save_loss_history(CONFIG, history_dict, which):
     fname = f"{CONFIG['dir_model_save']}/{CONFIG['model_file_name_prefix']}_{which}_loss_history.npy"
     np.save(fname, history_dict)
 
+    # TODO: class
+    # dd = np.load(fname, allow_pickle=True)
+    # print(dd)
+
 
 def save_config(CONFIG):
     fname = f"{CONFIG['dir_model_save']}/{CONFIG['model_file_name_prefix']}_CONFIG.npy"
@@ -344,7 +352,6 @@ def train_model(CONFIG):
     model.to(device) 
     print(f"Model cast to device = {model.device}\n")
 
-    loss_fn = nn.MSELoss(reduction="sum")
     optimizer = optim.Adam(model.parameters(), lr=CONFIG['init_learning_rate'])
 
     best_test_accuracy = float("inf")  # to identify best model ever seen
@@ -359,7 +366,11 @@ def train_model(CONFIG):
             data, target = prepare_data_and_target(data, target_dict, device)
             optimizer.zero_grad()
             output = model(data)[0] 
-            loss = calc_loss(loss_fn, output, target)
+
+
+            loss = calc_loss(output, target)
+
+
             cache_train = update_cache(cache_train, output, target, loss)
             loss.backward()
             optimizer.step()
@@ -379,7 +390,7 @@ def train_model(CONFIG):
             for batch_idx, (data, target_dict) in enumerate(test_loader):
                 data, target = prepare_data_and_target(data, target_dict, device)
                 pred = model(data)[0]
-                loss = calc_loss(loss_fn, pred, target)
+                loss = calc_loss(pred, target)
                 cache_test = update_cache(cache_test, pred, target, loss)
 
                 if batch_idx % CONFIG['record_loss_every_num_batch'] == 0 and batch_idx != 0:
