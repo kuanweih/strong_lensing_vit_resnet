@@ -310,6 +310,11 @@ def save_loss_history(CONFIG, history_dict, which):
     np.save(fname, history_dict)
 
 
+def save_config(CONFIG):
+    fname = f"{CONFIG['dir_model_save']}/{CONFIG['model_file_name_prefix']}_CONFIG.npy"
+    np.save(fname, CONFIG)
+
+
 def train_model(CONFIG):
     """ Train a model based on parameters in CONFIG.
 
@@ -321,6 +326,8 @@ def train_model(CONFIG):
 
     if not os.path.exists(CONFIG['dir_model_save']):
         os.mkdir(CONFIG['dir_model_save'])
+
+    save_config(CONFIG)
 
     # prepare data loaders
     train_dataset, test_dataset = get_train_test_datasets(CONFIG)
@@ -393,10 +400,7 @@ def train_model(CONFIG):
         for which, history_dict in zip(["train", "test"], [train_loss_history, test_loss_history]):
             save_loss_history(CONFIG, history_dict, which)
 
-        fname = f"{CONFIG['dir_model_save']}/{CONFIG['model_file_name_prefix']}_CONFIG.npy"
-        np.save(fname, CONFIG)
 
-        
 
 
 if __name__ == '__main__':
