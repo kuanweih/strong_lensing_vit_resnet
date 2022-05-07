@@ -147,7 +147,7 @@ class CacheHistory:
             "loss": [],
         }
 
-    def record_and_save(self, epoch, loss, CONFIG):
+    def record_and_save(self, epoch, cache_epoch, CONFIG):
         """ Record loss to the history dict.
 
         Args:
@@ -160,7 +160,7 @@ class CacheHistory:
             history_dict (dict): the updated history dict
         """
         self.history["epoch"].append(epoch)
-        self.history["loss"].append(loss)
+        self.history["loss"].append(cache_epoch.avg_loss)
 
         fname = f"{CONFIG['dir_model_save']}/{CONFIG['model_file_name_prefix']}_{self.tag}_history.npy"
         np.save(fname, self.history)
@@ -372,7 +372,7 @@ def train_model(CONFIG):
         for data, target_dict in tqdm(train_loader, total=len(train_loader)):
             data, target = prepare_data_and_target(data, target_dict, device)
             optimizer.zero_grad()
-            output = model(data)[0] 
+            output = model(data)[0]
             loss = calc_loss(output, target, CONFIG, device)
 
             cache_train.update_cache(output, target, loss)
@@ -402,9 +402,9 @@ def train_model(CONFIG):
             if cache_test.avg_loss < best_test_loss:
                 best_test_loss = cache_test.avg_loss
                 save_model(CONFIG, model, epoch, cache_test.avg_loss)
-    
-            train_history.record_and_save(epoch, cache_train.avg_loss, CONFIG)
-            test_history.record_and_save(epoch, cache_test.avg_loss, CONFIG)
+
+            train_history.record_and_save(epoch, cache_train, CONFIG)
+            test_history.record_and_save(epoch, cache_test, CONFIG)
 
 
 
@@ -412,7 +412,7 @@ def train_model(CONFIG):
 if __name__ == '__main__':
 
     CONFIG = {
-        'epoch': 2,
+        'epoch': 4,
         'batch_size': 30,
         'new_vit_model': True,
         'pretrained_model_name': "google/vit-base-patch16-224", # for 'new_vit_model' = True
