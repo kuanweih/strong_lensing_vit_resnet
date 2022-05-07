@@ -411,7 +411,6 @@ def train_model(CONFIG):
             train_history.record_and_save(epoch, cache_train, CONFIG)
             test_history.record_and_save(epoch, cache_test, CONFIG)
 
-    print(train_history.history)
 
 
 
