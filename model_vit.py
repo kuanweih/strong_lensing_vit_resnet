@@ -127,7 +127,7 @@ class CacheEpoch:
         """
         avg_err_mean_print = np.array_str(self.avg_err_mean, precision=4)
         avg_err_std_print = np.array_str(self.avg_err_std, precision=4)
-        print(f"epoch = {epoch}, {train_test_str}:")
+        print(f"\nepoch = {epoch}, {train_test_str}:")
         print(f"    loss (average over epoch) = {self.avg_loss:.4f}")
         print(f"    err_mean (average over epoch) = {avg_err_mean_print}")
         print(f"    err_std (average over epoch) = {avg_err_std_print}")
@@ -369,7 +369,7 @@ def train_model(CONFIG):
         model.train()
         cache_train = CacheEpoch()
 
-        for batch_idx, (data, target_dict) in enumerate(tqdm(train_loader, total=len(train_loader))):
+        for data, target_dict in tqdm(train_loader, total=len(train_loader)):
             data, target = prepare_data_and_target(data, target_dict, device)
             optimizer.zero_grad()
             output = model(data)[0] 
@@ -388,7 +388,7 @@ def train_model(CONFIG):
             model.eval()
             cache_test = CacheEpoch()
 
-            for batch_idx, (data, target_dict) in enumerate(test_loader):
+            for data, target_dict in test_loader:
                 data, target = prepare_data_and_target(data, target_dict, device)
                 pred = model(data)[0]
                 loss = calc_loss(pred, target, CONFIG, device)
