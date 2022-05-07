@@ -5,7 +5,6 @@
 
 
 import os
-from matplotlib.pyplot import axis
 import scipy.ndimage
 
 import numpy as np
@@ -145,6 +144,8 @@ class CacheHistory:
         self.history = {
             "epoch": [],
             "loss": [],
+            "err_mean": [],
+            "err_std": [],
         }
 
     def record_and_save(self, epoch, cache_epoch, CONFIG):
@@ -161,6 +162,8 @@ class CacheHistory:
         """
         self.history["epoch"].append(epoch)
         self.history["loss"].append(cache_epoch.avg_loss)
+        self.history["err_mean"].append(cache_epoch.avg_err_mean.tolist())
+        self.history["err_std"].append(cache_epoch.avg_err_std.tolist())
 
         fname = f"{CONFIG['dir_model_save']}/{CONFIG['model_file_name_prefix']}_{self.tag}_history.npy"
         np.save(fname, self.history)
@@ -406,6 +409,7 @@ def train_model(CONFIG):
             train_history.record_and_save(epoch, cache_train, CONFIG)
             test_history.record_and_save(epoch, cache_test, CONFIG)
 
+    print(train_history.history)
 
 
 
