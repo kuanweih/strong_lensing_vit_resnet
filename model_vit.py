@@ -212,6 +212,10 @@ def train_model(CONFIG):
 
 if __name__ == '__main__':
 
+    from src.helpers import list_avail_model_names
+
+    print(list_avail_model_names())
+
     CONFIG = {
         'epoch': 4,
         'batch_size': 30,
