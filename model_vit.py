@@ -122,6 +122,14 @@ def load_model(CONFIG):
 
 
 def save_model(CONFIG, model, epoch, test_loss):
+    """ Save trained model at the end of an epoch.
+
+    Args:
+        CONFIG (dict): CONFIG
+        model (pytorch model object): model to be saved
+        epoch (int): epoch
+        test_loss (float): test loss of the model
+    """
     _dir = CONFIG['output_folder']
     model_save_path = f"{_dir}/epoch_{epoch}_testloss_{test_loss:.6f}.mdl"
     torch.save(model, model_save_path)
