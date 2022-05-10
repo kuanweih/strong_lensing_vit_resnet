@@ -167,7 +167,7 @@ class CacheHistory:
         self.history["err_mean"].append(cache_epoch.avg_err_mean.tolist())
         self.history["err_std"].append(cache_epoch.avg_err_std.tolist())
 
-        fname = f"{CONFIG['dir_model_save']}/{CONFIG['model_file_name_prefix']}_{self.tag}_history.npy"
+        fname = f"{CONFIG['output_folder']}/{self.tag}_history.npy"
         np.save(fname, self.history)
 
 
@@ -298,7 +298,7 @@ def get_train_test_dataloaders(batch_size, train_dataset, test_dataset):
 
 def load_model(CONFIG):
     if CONFIG['load_new_model']:
-        model_name = CONFIG['pretrained_model_name']
+        model_name = CONFIG['new_model_name']
         n_targets = len(CONFIG['target_keys_weights'])
 
         if model_name == "google/vit-base-patch16-224":
@@ -312,26 +312,32 @@ def load_model(CONFIG):
         else:
             raise ValueError(f"{model_name} not a valid model name!")
 
-        print(f"Use fresh pretrained model = {CONFIG['pretrained_model_name']}\n")
+        print(f"Use fresh pretrained model = {CONFIG['new_model_name']}\n")
         print_n_train_params(model)
         print(" ")
     else:
-        model = torch.load(CONFIG['path_model_to_resume'])  
-        print(f"Use our trained model = {CONFIG['path_model_to_resume']}\n")
+        model = torch.load(CONFIG['resumed_model_path'])  
+        print(f"Use our trained model = {CONFIG['resumed_model_path']}\n")
     return model
 
 
 def save_config(CONFIG):
-    fname = f"{CONFIG['dir_model_save']}/{CONFIG['model_file_name_prefix']}_CONFIG.npy"
+    fname = f"{CONFIG['output_folder']}/CONFIG.npy"
     np.save(fname, CONFIG)
 
 
 def save_model(CONFIG, model, epoch, test_loss):
-    _dir = CONFIG['dir_model_save']
-    _prefix = CONFIG['model_file_name_prefix']
-    model_save_path = f"{_dir}/{_prefix}_epoch_{epoch}_testloss_{test_loss:.6f}.mdl"
+    _dir = CONFIG['output_folder']
+    model_save_path = f"{_dir}/epoch_{epoch}_testloss_{test_loss:.6f}.mdl"
     torch.save(model, model_save_path)
     print(f"\nSave model to {model_save_path}\n")
+
+
+def create_output_folder(CONFIG):
+    if not os.path.exists(CONFIG['output_folder']):
+        os.mkdir(CONFIG['output_folder'])
+    else:
+        raise ValueError(f"{CONFIG['output_folder']} already exist!")
 
 
 def train_model(CONFIG):
@@ -343,10 +349,9 @@ def train_model(CONFIG):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(f"Use device = {device}\n")
 
-    if not os.path.exists(CONFIG['dir_model_save']):
-        os.mkdir(CONFIG['dir_model_save'])
-
+    create_output_folder(CONFIG)
     save_config(CONFIG)
+
 
     # prepare data loaders
     train_dataset, test_dataset = get_train_test_datasets(CONFIG)
@@ -415,13 +420,12 @@ if __name__ == '__main__':
         'epoch': 4,
         'batch_size': 30,
         'load_new_model': True,
-        # 'pretrained_model_name': "google/vit-base-patch16-224", # for 'load_new_model' = True
-        'pretrained_model_name': "resnet18", # for 'load_new_model' = True
-        'path_model_to_resume': Path(""), # for 'load_new_model' = False
+        'new_model_name': "google/vit-base-patch16-224",  # for 'load_new_model' = True
+        # 'new_model_name': "resnet18",  # for 'load_new_model' = True
+        'resumed_model_path': Path(""),  # for 'load_new_model' = False
+        'output_folder': Path("C:/Users/abcd2/Downloads/tmp_dev_outputs"),  # needs to be non-existing
         'dataset_folder': Path("C:/Users/abcd2/Datasets/2022_icml_lens_sim/dev_256"),
-        'dir_model_save': Path("C:/Users/abcd2/Downloads/tmp_dev_outputs"),
-        'model_file_name_prefix': 'vit',
-        'init_learning_rate': 1e-4,
+        'init_learning_rate': 1e-3,
         'target_keys_weights': {
             "theta_E": 10, 
             "gamma": 1, 
