@@ -26,3 +26,8 @@ def save_config(CONFIG):
     np.save(fname, CONFIG)
 
 
+def list_avail_model_names():
+    return [
+        "google/vit-base-patch16-224",
+        "resnet18",
+    ]
