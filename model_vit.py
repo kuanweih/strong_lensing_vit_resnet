@@ -4,12 +4,6 @@
 """
 
 
-import os
-import scipy.ndimage
-
-import numpy as np
-import pandas as pd
-
 from tqdm import tqdm
 from pathlib import Path
 
@@ -17,170 +11,26 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from torchvision import transforms
 from torch.autograd import Variable
-from torch.utils.data import Dataset, DataLoader
-
 from transformers import ViTForImageClassification
 
+from src.data_utils import (
+    get_train_test_datasets,
+    get_train_test_dataloaders,
+)
+
+from src.cache_utils import (
+    CacheEpoch,
+    CacheHistory,
+)
+
+from src.helpers import (
+    print_n_train_params,
+    create_output_folder,
+    save_config,
+)
 
 
-
-class DeepLenstronomyDataset(Dataset):
-    """ The DeepLenstronomyDataset class.
-
-    Args:
-        Dataset: torch.utils.data.Dataset class
-    """
-    def __init__(self, target_keys_weights, root_dir, use_train=True, transform=None, target_transform=None):
-        """ Initialize the class.
-
-        Args:
-            target_keys (list): list of targets (Y)
-            root_dir (pathlib.Path object): dir of dataset
-            use_train (bool, optional): True: training set. False: testing set. Defaults to True.
-            transform (torchvision.transforms, optional): transforms for images (X). Defaults to None.
-            target_transform (torchvision.transforms, optional): transforms for targets (Y). Defaults to None.
-        """
-        self.target_keys_weights = target_keys_weights
-        self.root_dir = root_dir
-        self.transform = transform
-        self.target_transform = target_transform
-        self.use_train = use_train  # training set or test set
-        if self.use_train:
-            self.df = pd.read_csv(Path(f"{self.root_dir}/metadata_train.csv"))
-        else:
-            self.df = pd.read_csv(Path(f"{self.root_dir}/metadata_test.csv"))
-
-    def __getitem__(self, index):
-        if "img_name" in self.df.keys():
-            img_name = self.df['img_name'].values[index]
-        else:
-            img_name = self.df['img_path'].values[index][-13:]
-            print("img_name does not exist in meta csv so hard code by img_path instead.")
-        
-        img_path = Path(f"{self.root_dir}/{img_name}")
-        img = np.load(img_path)
-
-        ori_img_pixel = img.shape[0]
-        image_channel = 3
-        image_pixel = 224
-
-        img = scipy.ndimage.zoom(img, image_pixel / ori_img_pixel, order=1)
-        image = np.zeros((image_channel, image_pixel, image_pixel))
-
-        for i in range(image_channel):
-            image[i, :, :] += img
-
-        target_dict = {key: self.df[key].iloc[[index]].values for key in self.target_keys_weights}
-
-        return image, target_dict
-        
-    def __len__(self):
-        return self.df.shape[0]
-
-
-class CacheEpoch:
-    """ Cache within an epoch.
-    """
-    def __init__(self, tag):
-        """ Initialize cache attributes.
-
-        Args:
-            tag (str): "train" or "test"
-        """
-        self.tag = tag
-
-        self._cnt = 0
-        self._cum_loss = 0.0
-        self._cum_err_mean = 0
-        self._cum_err_std = 0
-
-        self.avg_loss = 0.0
-        self.avg_err_mean = 0
-        self.avg_err_std = 0
-
-    def update_cache(self, pred, target, loss):
-        """ Update cache for a learning update of a batch to the
-            cummulative attributes.
-
-        Args:
-            pred (torch.Tensor): predictions of the batch samples
-            target (torch.Tensor): targets of the batch samples
-            loss (torch.Tensor): weighted averaged loss of the batch
-        """
-        err = (pred - target).cpu().detach().numpy()
-        self._cum_err_mean += err.mean(axis=0)
-        self._cum_err_std += err.std(axis=0)
-        self._cum_loss += loss.item()
-        self._cnt += 1
-
-    def calc_avg_across_batches(self):
-        """ Calculate the average of every attribute within a complete
-            epoch (accross all batches).
-        """
-        self.avg_err_mean = self._cum_err_mean / self._cnt
-        self.avg_err_std = self._cum_err_std / self._cnt
-        self.avg_loss = self._cum_loss / self._cnt
-
-    def print_cache(self, epoch):
-        """ Print cache attributes (average over epoch).
-
-        Args:
-            epoch (int): epoch
-        """
-        avg_err_mean_print = np.array_str(self.avg_err_mean, precision=4)
-        avg_err_std_print = np.array_str(self.avg_err_std, precision=4)
-        print(f"\nepoch = {epoch}, {self.tag}:")
-        print(f"    loss = {self.avg_loss:.4f}")
-        print(f"    err_mean = {avg_err_mean_print}")
-        print(f"    err_std = {avg_err_std_print}")
-
-
-class CacheHistory:
-    """ Cache history for all epochs.
-    """
-    def __init__(self, tag):
-        """ Inintialize cache history (dict).
-
-        Args:
-            tag (str): "train" or "test"
-        """
-        self.tag = tag
-        self.history = {
-            "epoch": [],
-            "loss": [],
-            "err_mean": [],
-            "err_std": [],
-        }
-
-    def record_and_save(self, epoch, cache_epoch, CONFIG):
-        """ Record all caches within a single epoch. Save history dict.
-
-        Args:
-            epoch (int): current epoch
-            cache_epoch (CacheEpoch): cache_epoch object 
-            CONFIG (dict): CONFIG
-        """
-        self.history["epoch"].append(epoch)
-        self.history["loss"].append(cache_epoch.avg_loss)
-        self.history["err_mean"].append(cache_epoch.avg_err_mean.tolist())
-        self.history["err_std"].append(cache_epoch.avg_err_std.tolist())
-
-        fname = f"{CONFIG['dir_model_save']}/{CONFIG['model_file_name_prefix']}_{self.tag}_history.npy"
-        np.save(fname, self.history)
-
-
-
-
-def print_n_train_params(model):
-    """ Print number of trainable parameters.
-
-    Args:
-        model (model object): presumably a ViT model
-    """
-    n = sum(param.numel() for param in model.parameters() if param.requires_grad)
-    print(f"Number of trainable parameters: {n}")
 
 
 def prepare_data_and_target(data, target_dict, device):
@@ -235,110 +85,59 @@ def calc_loss(pred, target, CONFIG, device):
     return loss
 
 
-def get_train_test_datasets(CONFIG):
-    """ Create DeepLenstronomyDataset objects.
+def load_model(CONFIG):
+    """ Load a model based on CONFIG.
 
     Args:
         CONFIG (dict): CONFIG
 
-    Returns:
-        train_dataset (DeepLenstronomyDataset): training dataset
-        test_dataset (DeepLenstronomyDataset): testing dataset
-    """
-    data_transform = transforms.Compose([
-        transforms.ToTensor(), # scale to [0,1] and convert to tensor
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ])
-    target_transform = torch.Tensor
-
-    train_dataset = DeepLenstronomyDataset(
-        CONFIG['target_keys_weights'],
-        CONFIG['dataset_folder'], 
-        use_train=True, 
-        transform=data_transform, 
-        target_transform=target_transform,
-    )
-    test_dataset = DeepLenstronomyDataset(
-        CONFIG['target_keys_weights'],
-        CONFIG['dataset_folder'], 
-        use_train=False, 
-        transform=data_transform, 
-        target_transform=target_transform,
-    )
-    print("Number of train samples =", train_dataset.__len__())
-    print("Number of test samples =", test_dataset.__len__())
-    print(" ")
-    return train_dataset, test_dataset
-
-
-def get_train_test_dataloaders(batch_size, train_dataset, test_dataset):
-    """ Convert Datasets into DataLoaders.
-
-    Args:
-        batch_size (int): batch size
-        train_dataset (Dataset object): DeepLenstronomyDataset
-        test_dataset (Dataset object): DeepLenstronomyDataset
+    Raises:
+        ValueError: CONFIG['new_model_name'] needs to match.
 
     Returns:
-        train_loader (DataLoader object): training DataLoader
-        test_loader (DataLoader object): testing DataLoader
+        model: model ready for training.
     """
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=batch_size, 
-        shuffle=True,
-    )
-    test_loader = DataLoader(
-        test_dataset,
-        batch_size=batch_size, 
-        shuffle=True,
-    )
-    return train_loader, test_loader
+    if CONFIG['load_new_model']:
+        model_name = CONFIG['new_model_name']
+        n_targets = len(CONFIG['target_keys_weights'])
 
+        if model_name == "google/vit-base-patch16-224":
+            model = ViTForImageClassification.from_pretrained(model_name)
+            num_ftrs = model.classifier.in_features
+            model.classifier = nn.Linear(in_features=num_ftrs, out_features=n_targets, bias=True)
+        elif model_name == "resnet18":
+            model = torch.hub.load('pytorch/vision:v0.10.0', model_name, pretrained=True)
+            num_ftrs = model.fc.in_features
+            model.fc = nn.Linear(in_features=num_ftrs, out_features=n_targets, bias=True)
+        else:
+            raise ValueError(f"{model_name} not a valid model name!")
 
-def prepare_vit_model(CONFIG):
-    """ Prepare a fresh pretrained ViT model.
-
-    Args:
-        CONFIG (dict): CONFIG
-
-    Returns:
-        model (model object): a ViT model constructed based on CONFIG
-    """
-    out_features = len(CONFIG['target_keys_weights'])
-    model = ViTForImageClassification.from_pretrained(CONFIG['pretrained_model_name'])
-    print_n_train_params(model)
-    model.classifier = nn.Linear(in_features=768, out_features=out_features, bias=True)
-    print_n_train_params(model)
-    print(" ")
-    return model
-
-
-def init_model(CONFIG):
-    if CONFIG['new_vit_model']:
-        model = prepare_vit_model(CONFIG)
-        print(f"Use fresh pretrained model = {CONFIG['pretrained_model_name']}\n")
+        print(f"Use fresh pretrained model = {CONFIG['new_model_name']}\n")
+        print_n_train_params(model)
+        print(" ")
     else:
-        model = torch.load(CONFIG['path_model_to_resume'])  
-        print(f"Use our trained model = {CONFIG['path_model_to_resume']}\n")
+        model = torch.load(CONFIG['resumed_model_path'])  
+        print(f"Use our trained model = {CONFIG['resumed_model_path']}\n")
     return model
-
-
-def save_config(CONFIG):
-    fname = f"{CONFIG['dir_model_save']}/{CONFIG['model_file_name_prefix']}_CONFIG.npy"
-    np.save(fname, CONFIG)
 
 
 def save_model(CONFIG, model, epoch, test_loss):
-    _dir = CONFIG['dir_model_save']
-    _prefix = CONFIG['model_file_name_prefix']
-    model_save_path = f"{_dir}/{_prefix}_epoch_{epoch}_testloss_{test_loss:.6f}.mdl"
+    """ Save trained model at the end of an epoch.
+
+    Args:
+        CONFIG (dict): CONFIG
+        model (pytorch model object): model to be saved
+        epoch (int): epoch
+        test_loss (float): test loss of the model
+    """
+    _dir = CONFIG['output_folder']
+    model_save_path = f"{_dir}/epoch_{epoch}_testloss_{test_loss:.6f}.mdl"
     torch.save(model, model_save_path)
     print(f"\nSave model to {model_save_path}\n")
 
 
 def train_model(CONFIG):
-    """ Train a model based on parameters in CONFIG.
+    """ Train models based on parameters in CONFIG.
 
     Args:
         CONFIG (dict): model configuration dict
@@ -346,20 +145,17 @@ def train_model(CONFIG):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(f"Use device = {device}\n")
 
-    if not os.path.exists(CONFIG['dir_model_save']):
-        os.mkdir(CONFIG['dir_model_save'])
-
+    create_output_folder(CONFIG)
     save_config(CONFIG)
+
 
     # prepare data loaders
     train_dataset, test_dataset = get_train_test_datasets(CONFIG)
     train_loader, test_loader = get_train_test_dataloaders(CONFIG['batch_size'], train_dataset, test_dataset)
 
-    # prepare model
-    model = init_model(CONFIG)
-
+    # load model and cast to 'device'
+    model = load_model(CONFIG)
     model.to(device) 
-    print(f"Model cast to device = {model.device}\n")
 
     optimizer = optim.Adam(model.parameters(), lr=CONFIG['init_learning_rate'])
 
@@ -416,16 +212,20 @@ def train_model(CONFIG):
 
 if __name__ == '__main__':
 
+    from src.helpers import list_avail_model_names
+
+    print(list_avail_model_names())
+
     CONFIG = {
         'epoch': 4,
         'batch_size': 30,
-        'new_vit_model': True,
-        'pretrained_model_name': "google/vit-base-patch16-224", # for 'new_vit_model' = True
-        'path_model_to_resume': Path(""), # for 'new_vit_model' = False
+        'load_new_model': True,
+        'new_model_name': "google/vit-base-patch16-224",  # for 'load_new_model' = True
+        # 'new_model_name': "resnet18",  # for 'load_new_model' = True
+        'resumed_model_path': Path(""),  # for 'load_new_model' = False
+        'output_folder': Path("C:/Users/abcd2/Downloads/tmp_dev_outputs"),  # needs to be non-existing
         'dataset_folder': Path("C:/Users/abcd2/Datasets/2022_icml_lens_sim/dev_256"),
-        'dir_model_save': Path("C:/Users/abcd2/Downloads/tmp_dev_outputs"),
-        'model_file_name_prefix': 'vit_dev',
-        'init_learning_rate': 1e-4,
+        'init_learning_rate': 1e-3,
         'target_keys_weights': {
             "theta_E": 10, 
             "gamma": 1, 
