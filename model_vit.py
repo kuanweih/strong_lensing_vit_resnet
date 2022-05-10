@@ -86,6 +86,17 @@ def calc_loss(pred, target, CONFIG, device):
 
 
 def load_model(CONFIG):
+    """ Load a model based on CONFIG.
+
+    Args:
+        CONFIG (dict): CONFIG
+
+    Raises:
+        ValueError: CONFIG['new_model_name'] needs to match.
+
+    Returns:
+        model: model ready for training.
+    """
     if CONFIG['load_new_model']:
         model_name = CONFIG['new_model_name']
         n_targets = len(CONFIG['target_keys_weights'])
