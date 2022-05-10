@@ -296,28 +296,25 @@ def get_train_test_dataloaders(batch_size, train_dataset, test_dataset):
     return train_loader, test_loader
 
 
-def prepare_vit_model(CONFIG):
-    """ Prepare a fresh pretrained ViT model.
+def load_model(CONFIG):
+    if CONFIG['load_new_model']:
+        model_name = CONFIG['pretrained_model_name']
+        n_targets = len(CONFIG['target_keys_weights'])
 
-    Args:
-        CONFIG (dict): CONFIG
+        if model_name == "google/vit-base-patch16-224":
+            model = ViTForImageClassification.from_pretrained(model_name)
+            num_ftrs = model.classifier.in_features
+            model.classifier = nn.Linear(in_features=num_ftrs, out_features=n_targets, bias=True)
+        elif model_name == "resnet18":
+            model = torch.hub.load('pytorch/vision:v0.10.0', model_name, pretrained=True)
+            num_ftrs = model.fc.in_features
+            model.fc = nn.Linear(in_features=num_ftrs, out_features=n_targets, bias=True)
+        else:
+            raise ValueError(f"{model_name} not a valid model name!")
 
-    Returns:
-        model (model object): a ViT model constructed based on CONFIG
-    """
-    out_features = len(CONFIG['target_keys_weights'])
-    model = ViTForImageClassification.from_pretrained(CONFIG['pretrained_model_name'])
-    print_n_train_params(model)
-    model.classifier = nn.Linear(in_features=768, out_features=out_features, bias=True)
-    print_n_train_params(model)
-    print(" ")
-    return model
-
-
-def init_model(CONFIG):
-    if CONFIG['new_vit_model']:
-        model = prepare_vit_model(CONFIG)
         print(f"Use fresh pretrained model = {CONFIG['pretrained_model_name']}\n")
+        print_n_train_params(model)
+        print(" ")
     else:
         model = torch.load(CONFIG['path_model_to_resume'])  
         print(f"Use our trained model = {CONFIG['path_model_to_resume']}\n")
@@ -355,11 +352,9 @@ def train_model(CONFIG):
     train_dataset, test_dataset = get_train_test_datasets(CONFIG)
     train_loader, test_loader = get_train_test_dataloaders(CONFIG['batch_size'], train_dataset, test_dataset)
 
-    # prepare model
-    model = init_model(CONFIG)
-
+    # load model and cast to 'device'
+    model = load_model(CONFIG)
     model.to(device) 
-    print(f"Model cast to device = {model.device}\n")
 
     optimizer = optim.Adam(model.parameters(), lr=CONFIG['init_learning_rate'])
 
@@ -419,12 +414,13 @@ if __name__ == '__main__':
     CONFIG = {
         'epoch': 4,
         'batch_size': 30,
-        'new_vit_model': True,
-        'pretrained_model_name': "google/vit-base-patch16-224", # for 'new_vit_model' = True
-        'path_model_to_resume': Path(""), # for 'new_vit_model' = False
+        'load_new_model': True,
+        # 'pretrained_model_name': "google/vit-base-patch16-224", # for 'load_new_model' = True
+        'pretrained_model_name': "resnet18", # for 'load_new_model' = True
+        'path_model_to_resume': Path(""), # for 'load_new_model' = False
         'dataset_folder': Path("C:/Users/abcd2/Datasets/2022_icml_lens_sim/dev_256"),
         'dir_model_save': Path("C:/Users/abcd2/Downloads/tmp_dev_outputs"),
-        'model_file_name_prefix': 'vit_dev',
+        'model_file_name_prefix': 'vit',
         'init_learning_rate': 1e-4,
         'target_keys_weights': {
             "theta_E": 10, 
