@@ -23,16 +23,16 @@ class CacheEpoch:
         self.avg_err_mean = 0
         self.avg_err_std = 0
 
-    def update_cache(self, pred, target, loss):
+    def update_cache(self, pred_mu, target, loss):
         """ Update cache for a learning update of a batch to the
             cummulative attributes.
 
         Args:
-            pred (torch.Tensor): predictions of the batch samples
+            pred_mu (torch.Tensor): predictions of the batch samples
             target (torch.Tensor): targets of the batch samples
             loss (torch.Tensor): weighted averaged loss of the batch
         """
-        err = (pred - target).cpu().detach().numpy()
+        err = (pred_mu - target).cpu().detach().numpy()
         self._cum_err_mean += err.mean(axis=0)
         self._cum_err_std += err.std(axis=0)
         self._cum_loss += loss.item()
