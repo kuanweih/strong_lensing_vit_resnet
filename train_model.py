@@ -204,7 +204,7 @@ def train_model(CONFIG):
             pred_mu, pred_logvar = calc_pred(model, data)
             loss = nll_diagonal(target, pred_mu, pred_logvar, device, CONFIG)
 
-            cache_train.update_cache(pred_mu, target, loss)
+            cache_train.update_cache(pred_mu, target)
 
             loss.backward()
             optimizer.step()
@@ -222,15 +222,15 @@ def train_model(CONFIG):
                 pred_mu, pred_logvar = calc_pred(model, data)  
                 loss = nll_diagonal(target, pred_mu, pred_logvar, device, CONFIG)
 
-                cache_test.update_cache(pred_mu, target, loss)
+                cache_test.update_cache(pred_mu, target)
 
             cache_test.calc_avg_across_batches()
             cache_test.print_cache(epoch)
 
             # save model with best test loss so far
-            if cache_test.avg_loss < best_test_loss:
-                best_test_loss = cache_test.avg_loss
-                save_model(CONFIG, model, epoch, cache_test.avg_loss)
+            if cache_test.avg_mse < best_test_loss:
+                best_test_loss = cache_test.avg_mse
+                save_model(CONFIG, model, epoch, cache_test.avg_mse)
 
             train_history.record_and_save(epoch, cache_train, CONFIG)
             test_history.record_and_save(epoch, cache_test, CONFIG)
