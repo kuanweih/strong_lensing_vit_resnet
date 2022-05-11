@@ -3,6 +3,8 @@
     Modified by Kuan-Wei Huang
 """
 
+import numpy as np
+
 import torch
 import torchvision
 import torch.nn as nn
@@ -50,36 +52,31 @@ def prepare_data_and_target(data, target_dict, device):
     return data, target
 
 
-def calc_loss(pred, target, CONFIG, device):
-    """ Average weighted mean squared loss per sample.
-
-    Let 
-        i = range(0, B): sample index in a batch with size B
-        j = range(0, T): target index for T targets
-        pred_(i, j): prediction for target j and sample i
-        truth_(i, j): target for target j and sample i
-        SE_(i, j): squared error for target j and sample i
-        MSE_j: mean squared error for target j per sample
-        w_j: weight for target j
-        W = sum(w_j for j in range(T)): total weight
-
-    SE_(i, j) = (pred_(i, j) - truth_(i, j))**2
-    MSE_j = sum(SE_(i, j) for i in range(B)) / B
-    Loss = sum(w_j * MSE_j for j in range(T)) / W
-    
-    Args:
-        pred (torch.Tensor): prediction of a batch
-        target (torch.Tensor): target of a batch
-        CONFIG (dict): CONFIG
-        device (torch.device): cpu or gpu
-
-    Returns:
-        [torch.Tensor]: Loss
+def nll_diagonal(target, mu, logvar, device, CONFIG):
+    """Evaluate the NLL for single Gaussian with diagonal covariance matrix
+    Parameters
+    ----------
+    target : torch.Tensor of shape [batch_size, Y_dim]
+        Y labels
+    mu : torch.Tensor of shape [batch_size, Y_dim]
+        network prediction of the mu (mean parameter) of the BNN posterior
+    logvar : torch.Tensor of shape [batch_size, Y_dim]
+        network prediction of the log of the diagonal elements of the covariance matrix
+    Returns
+    -------
+    torch.Tensor of shape
+        NLL values
     """
     weight = [w for _, w in CONFIG["target_keys_weights"].items()]
     weight = torch.tensor(weight, requires_grad=False).to(device)
-    loss = torch.mean((pred - target)**2, axis=0)
-    loss = torch.sum(weight * loss) / weight.sum()
+    weight = weight / torch.sum(weight)
+
+    precision = torch.exp(-logvar)
+    sq_err = (target - mu) * (target - mu)
+
+    loss = 0.5 * (precision*sq_err + logvar + np.log(2*np.pi))
+    loss = torch.sum(loss*weight, dim=1)  # weighted sum accross targets 
+    loss = torch.mean(loss, dim=0) # accross batch samples
     return loss
 
 
@@ -97,16 +94,17 @@ def load_model(CONFIG):
     """
     if CONFIG['load_new_model']:
         model_name = CONFIG['new_model_name']
-        n_targets = len(CONFIG['target_keys_weights'])
+        n_targets = len(CONFIG['target_keys_weights']) 
+        out_features = 2 * n_targets  # double the len for uncertainties
 
         if model_name == "google/vit-base-patch16-224":
             model = ViTForImageClassification.from_pretrained(model_name)
             num_ftrs = model.classifier.in_features
-            model.classifier = nn.Linear(in_features=num_ftrs, out_features=n_targets, bias=True)
+            model.classifier = nn.Linear(in_features=num_ftrs, out_features=out_features, bias=True)
         elif model_name == "resnet18":
             model = torch.hub.load('pytorch/vision:v0.10.0', model_name, pretrained=True)
             num_ftrs = model.fc.in_features
-            model.fc = nn.Linear(in_features=num_ftrs, out_features=n_targets, bias=True)
+            model.fc = nn.Linear(in_features=num_ftrs, out_features=out_features, bias=True)
         else:
             raise ValueError(f"{model_name} not a valid model name!")
 
@@ -140,7 +138,9 @@ def calc_pred(model, data):
         pred = model(data)
 
     Different model objects have different pred shapes by default such as 
-    ViT and ResNet.
+    ViT and ResNet and that's what the if statements are for.
+
+        'pred' will be split into 'pred_mu' and 'pred_logvar'
 
     Args:
         model (model object): ViT or ResNet
@@ -150,7 +150,8 @@ def calc_pred(model, data):
         TypeError: type(model) has to be checked
 
     Returns:
-        [torch.Tensor]: prediction 
+        [torch.Tensor]: pred_mu: target prediction 
+        [torch.Tensor]: pred_logvar: prediction log variance
     """
     if isinstance(model, ViTForImageClassification):
         pred = model(data)[0]
@@ -159,7 +160,9 @@ def calc_pred(model, data):
     else:
         raise TypeError(f"{type(model)} not implemented for correct pred shape.")
     
-    return pred
+    pred_mu, pred_logvar = torch.tensor_split(pred, 2, dim=1)
+
+    return pred_mu, pred_logvar
 
 
 def train_model(CONFIG):
@@ -173,7 +176,6 @@ def train_model(CONFIG):
 
     create_output_folder(CONFIG)
     save_config(CONFIG)
-
 
     # prepare data loaders
     train_dataset, test_dataset = get_train_test_datasets(CONFIG)
@@ -199,14 +201,13 @@ def train_model(CONFIG):
         for data, target_dict in tqdm(train_loader, total=len(train_loader)):
             data, target = prepare_data_and_target(data, target_dict, device)
             optimizer.zero_grad()
-            pred = calc_pred(model, data)
-            loss = calc_loss(pred, target, CONFIG, device)
-            
-            cache_train.update_cache(pred, target, loss)
+            pred_mu, pred_logvar = calc_pred(model, data)
+            loss = nll_diagonal(target, pred_mu, pred_logvar, device, CONFIG)
+
+            cache_train.update_cache(pred_mu, target)
 
             loss.backward()
             optimizer.step()
-
 
         cache_train.calc_avg_across_batches()
         cache_train.print_cache(epoch)
@@ -218,18 +219,18 @@ def train_model(CONFIG):
 
             for data, target_dict in test_loader:
                 data, target = prepare_data_and_target(data, target_dict, device)
-                pred = calc_pred(model, data)
-                loss = calc_loss(pred, target, CONFIG, device)
+                pred_mu, pred_logvar = calc_pred(model, data)  
+                loss = nll_diagonal(target, pred_mu, pred_logvar, device, CONFIG)
 
-                cache_test.update_cache(pred, target, loss)
+                cache_test.update_cache(pred_mu, target)
 
             cache_test.calc_avg_across_batches()
             cache_test.print_cache(epoch)
 
             # save model with best test loss so far
-            if cache_test.avg_loss < best_test_loss:
-                best_test_loss = cache_test.avg_loss
-                save_model(CONFIG, model, epoch, cache_test.avg_loss)
+            if cache_test.avg_mse < best_test_loss:
+                best_test_loss = cache_test.avg_mse
+                save_model(CONFIG, model, epoch, cache_test.avg_mse)
 
             train_history.record_and_save(epoch, cache_train, CONFIG)
             test_history.record_and_save(epoch, cache_test, CONFIG)
@@ -244,7 +245,7 @@ if __name__ == '__main__':
     print(list_avail_model_names())
 
     CONFIG = {
-        'epoch': 4,
+        'epoch': 10,
         'batch_size': 30,
         'load_new_model': True,
         # 'new_model_name': "google/vit-base-patch16-224",  # for 'load_new_model' = True
@@ -254,7 +255,7 @@ if __name__ == '__main__':
         'dataset_folder': Path("C:/Users/abcd2/Datasets/2022_icml_lens_sim/dev_256"),
         'init_learning_rate': 1e-3,
         'target_keys_weights': {
-            "theta_E": 10, 
+            "theta_E": 1, 
             "gamma": 1, 
             "center_x": 1, 
             "center_y": 1, 
