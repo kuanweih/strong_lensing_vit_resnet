@@ -56,8 +56,8 @@ class CacheEpoch:
         avg_err_std_print = np.array_str(self.avg_err_std, precision=4)
         print(f"\nepoch = {epoch}, {self.tag}:")
         print(f"    loss = {self.avg_loss:.4f}")
-        print(f"    err_mean = {avg_err_mean_print}")
-        print(f"    err_std = {avg_err_std_print}")
+        print(f"        err_mean = {avg_err_mean_print}")
+        print(f"        err_std = {avg_err_std_print}")
 
 
 class CacheHistory:
