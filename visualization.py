@@ -2,14 +2,12 @@ import torch
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
+import sys
 
 from tqdm import tqdm
-
-from model_vit import (
-    get_train_test_dataloaders, 
-    get_train_test_datasets,
-    prepare_data_and_target,
-)
+from src.data_utils import get_train_test_dataloaders
+from src.data_utils import get_train_test_datasets
+from train_model import prepare_data_and_target
 
 
 
@@ -18,17 +16,17 @@ class VisualModel:
 
     def __init__(self, CONFIG, model_path):
 
-        self.show_targets = ["theta_E", "e1", "e2"]
-
+        self.show_targets = ["theta_E", "e1", "e2"] 
         self.CONFIG = CONFIG
         self.model_path = model_path
 
-        self.device = torch.device("cpu")
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        print(f"Use device = {self.device}\n")
 
         self.model = torch.load(self.model_path)
         self.model.to(self.device)
         self.model.eval()
-
+        
         train_dataset, test_dataset = get_train_test_datasets(self.CONFIG)
         _, self.test_loader = get_train_test_dataloaders(self.CONFIG['batch_size'], train_dataset, test_dataset)
         
@@ -57,7 +55,7 @@ class VisualModel:
                         _error= (_pred - _truth) / _truth
                         print(f"{key}: truth = {_truth: 0.4f}, pred = {_pred: 0.4f}, error = {100 * _error: 0.2f} %")
             
-                plt.imshow(data[isample, 0, :, :])
+                plt.imshow(data.cpu()[isample, 0, :, :])
                 plt.show()
 
 
