@@ -153,7 +153,7 @@ def calc_pred(model, data):
         [torch.Tensor]: pred_mu: target prediction 
         [torch.Tensor]: pred_logvar: prediction log variance
     """
-    if isinstance(model, ViTForImageClassification): 
+    if isinstance(model, ViTForImageClassification):
         pred = model(data)[0]
     elif isinstance(model, torchvision.models.resnet.ResNet):
         pred = model(data)
