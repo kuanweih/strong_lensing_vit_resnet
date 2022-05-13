@@ -16,7 +16,7 @@ class VisualModel:
 
     def __init__(self, CONFIG, model_path):
 
-        self.show_targets = ["theta_E", "e1", "e2"] 
+        self.show_targets = ["theta_E","gamma", "center_x", "center_y","e1", "e2","gamma_ext","psi_ext","lens_light_R_sersic", "lens_light_n_sersic"] 
         self.CONFIG = CONFIG
         self.model_path = model_path
 
@@ -89,6 +89,7 @@ class VisualModel:
 
 
     def plot_each_pred_truth(self, target_key):
+        
         sns.set(style="white", font_scale=1)
         fig, ax = plt.subplots()
 
@@ -107,5 +108,36 @@ class VisualModel:
         ax.set_xlabel('truth')
         ax.set_ylabel('prediction')
 
+        
 
 
+class Visual_loss:
+    
+    def __init__(self, CONFIG):
+        
+        self.dir = CONFIG['output_folder']
+    
+    def plot_train_test_loss(self):
+        
+        test_history_path = f"{self.dir}/test_history.npy"
+        test_history= np.load(test_history_path, allow_pickle=True)
+        
+        test_mse = test_history.item().get('mse')
+        test_epoch= test_history.item().get('epoch')
+        
+        train_history_path = f"{self.dir}/train_history.npy"
+        train_history= np.load(train_history_path, allow_pickle=True)
+        
+        train_mse = train_history.item().get('mse')
+        train_epoch = train_history.item().get('epoch')
+        
+        fig, ax = plt.subplots()
+        #ax.set_aspect('equal', adjustable='box')
+        
+        ax.plot(test_mse, 'b-', label='test')
+        ax.plot(train_mse, 'r--', label='train')
+        
+        ax.legend()
+        ax.set_title("loss")
+        ax.set_xlabel('epoch')
+        ax.set_ylabel('mse')
