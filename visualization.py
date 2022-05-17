@@ -7,8 +7,8 @@ import sys
 from tqdm import tqdm
 from src.data_utils import get_train_test_dataloaders
 from src.data_utils import get_train_test_datasets
-from train_model import prepare_data_and_target
-
+from train_model import prepare_data_and_target, calc_pred
+from random import randrange
 
 
 
@@ -16,7 +16,7 @@ class VisualModel:
 
     def __init__(self, CONFIG, model_path):
 
-        self.show_targets = ["theta_E","gamma", "center_x", "center_y","e1", "e2","gamma_ext","psi_ext","lens_light_R_sersic", "lens_light_n_sersic"] 
+        self.show_targets = ["theta_E","center_x", "center_y","e1", "e2"] 
         self.CONFIG = CONFIG
         self.model_path = model_path
 
@@ -32,7 +32,7 @@ class VisualModel:
         
         self.n_test = test_dataset.__len__()
         
-        self.pred_dict, self.truth_dict = self.get_pred_truth_dicts()
+        self.pred_dict, self.truth_dict, self.sigma_dict = self.get_pred_truth_dicts()
 
 
     def show_a_few_samples(self, n_batch, n_sample_batch):
@@ -42,7 +42,7 @@ class VisualModel:
                 break
                 
             data, _ = prepare_data_and_target(data, target_dict, self.device)
-            pred = self.model(data)[0]
+            pred = self.model(data)[0] 
             
             for isample in range(self.CONFIG['batch_size']):
                 if isample == n_sample_batch:
@@ -57,35 +57,66 @@ class VisualModel:
             
                 plt.imshow(data.cpu()[isample, 0, :, :])
                 plt.show()
+    
+    def show_a_few_samples_uncertainty(self, n_batch, n_sample_batch):
+
+        for batch_idx, (data, target_dict) in enumerate(self.test_loader):
+            if batch_idx == n_batch:
+                break
+                
+            data, _ = prepare_data_and_target(data, target_dict, self.device)
+            pred_mu, pred_logvar = calc_pred(self.model, data)
+            
+            for isample in range(self.CONFIG['batch_size']):
+                if isample == n_sample_batch:
+                    break
+                
+                for ikey, key in enumerate(target_dict):
+                    if key in self.show_targets:
+                        _truth = target_dict[key][isample][0].data.cpu()
+                        _pred_mu = pred_mu[isample][ikey].data.cpu()
+                        _pred_logvar = pred_logvar[isample][ikey].data.cpu()
+                        _sigma = np.sqrt(np.exp(_pred_logvar))                        
+                        _chi= np.sqrt((_pred_mu - _truth)**2 / _sigma**2)
+                        print(f"{key}: truth = {_truth: 0.4f}, pred = {_pred_mu: 0.4f}, sigma = {_sigma: 0.2f}")
+            
+                plt.imshow(data.cpu()[isample, 0, :, :])
+                plt.show()
 
 
     def get_pred_truth_dicts(self):
 
         pred_dict = {k: [] for k in self.show_targets}
         truth_dict = {k: [] for k in self.show_targets}
+        sigma_dict = {k: [] for k in self.show_targets}
 
         for batch_idx, (data, target_dict) in enumerate(tqdm(self.test_loader, total=len(self.test_loader))):
 
-            # #TODO: remove this
-            # if batch_idx == 4:
-            #     break
+             #TODO: remove this
+            #if batch_idx == 4:
+            #    break
             
             data, _ = prepare_data_and_target(data, target_dict, self.device)
-            pred = self.model(data)[0]
-
+            #pred = self.model(data)[0]
+            pred_mu, pred_logvar = calc_pred(self.model, data)
+            
             for ikey, key in enumerate(target_dict):
                 if key in self.show_targets:
                     _truth = target_dict[key][:, 0].detach().tolist()
-                    _pred = pred[:, ikey].detach().tolist()
+                    _pred_mu= pred_mu[:, ikey].detach().tolist()
+                    _pred_logvar = pred_logvar[:,ikey].detach().tolist()
+                    _sigma = np.sqrt(np.exp(_pred_logvar))
 
                     truth_dict[key].extend(_truth)
-                    pred_dict[key].extend(_pred)
+                    pred_dict[key].extend(_pred_mu)
+                    sigma_dict[key].extend(_sigma)
 
         for key in self.show_targets:
             truth_dict[key] = np.array(truth_dict[key])
             pred_dict[key] = np.array(pred_dict[key])
+            sigma_dict[key] = np.array(sigma_dict[key])
 
-        return pred_dict, truth_dict
+        return pred_dict, truth_dict, sigma_dict
 
 
     def plot_each_pred_truth(self, target_key):
@@ -104,6 +135,35 @@ class VisualModel:
         ax.hexbin(x, y, extent=(xymin, xymax, xymin, xymax))
         ax.plot([xymin, xymax], [xymin, xymax], 'w--', alpha=0.5)
 
+        ax.set_title(target_key)
+        ax.set_xlabel('truth')
+        ax.set_ylabel('prediction')
+        
+    def plot_each_pred_truth_uncertainty(self, target_key):
+        
+        sns.set(style="white", font_scale=1)
+        fig, ax = plt.subplots(figsize=(8,8))
+        plt.figure(figsize=(3, 3))
+
+        ax.set_aspect('equal', adjustable='box')
+        
+        x = self.truth_dict[target_key]
+        y = self.pred_dict[target_key]
+        z = self.sigma_dict[target_key]
+
+        xymin = min(min(x), min(y))
+        xymax = max(max(x), max(y))
+
+        ax.hexbin(x, y, extent=(xymin, xymax, xymin, xymax))
+        ax.plot([xymin, xymax], [xymin, xymax], 'w--', alpha=0.5)
+        
+        #pick random 20 points to show the error bars
+        index = np.linspace(0, len(x)-1, 20).astype(int)
+        x_select = [x[i] for i in index]
+        y_select = [y[i] for i in index]
+        z_select = [z[i] for i in index]
+        ax.errorbar(x_select, y_select, yerr=z_select, fmt='o')
+        
         ax.set_title(target_key)
         ax.set_xlabel('truth')
         ax.set_ylabel('prediction')
