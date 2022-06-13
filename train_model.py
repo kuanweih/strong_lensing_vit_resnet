@@ -74,7 +74,7 @@ def nll_diagonal(target, mu, logvar, device, CONFIG):
     precision = torch.exp(-logvar)
     sq_err = (target - mu) * (target - mu)
 
-    loss = 0.5 * (precision*sq_err + logvar + np.log(2*np.pi))
+    loss = 0.5 * (precision*sq_err + logvar + np.log(2*np.pi))            #######
     loss = torch.sum(loss*weight, dim=1)  # weighted sum accross targets 
     loss = torch.mean(loss, dim=0) # accross batch samples
     return loss
@@ -95,7 +95,7 @@ def load_model(CONFIG):
     if CONFIG['load_new_model']:
         model_name = CONFIG['new_model_name']
         n_targets = len(CONFIG['target_keys_weights']) 
-        out_features = 2 * n_targets  # double the len for uncertainties
+        out_features = 2 * n_targets  # double the len for uncertainties       ######
 
         if model_name == "google/vit-base-patch16-224":
             model = ViTForImageClassification.from_pretrained(model_name)
