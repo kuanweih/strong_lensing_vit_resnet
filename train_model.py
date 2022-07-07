@@ -115,7 +115,7 @@ def load_model(CONFIG):
             raise ValueError(f"{model_name} not a valid model name!")
 
         print(f"Use fresh pretrained model = {CONFIG['new_model_name']}\n")
-        print_n_train_params(model)        
+        print_n_train_params(model)
         print(" ")
     else:
         model = torch.load(CONFIG['resumed_model_path'])  
