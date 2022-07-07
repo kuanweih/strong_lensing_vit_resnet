@@ -3,6 +3,7 @@
     Modified by Kuan-Wei Huang
 """
 
+from xml.dom.minidom import NamedNodeMap
 import numpy as np
 
 import torch
@@ -98,23 +99,47 @@ def load_model(CONFIG):
         out_features = 2 * n_targets  # double the len for uncertainties
 
         if model_name == "google/vit-base-patch16-224":
-            model = ViTForImageClassification.from_pretrained(model_name)
+            model = ViTForImageClassification.from_pretrained(
+                model_name, 
+                hidden_dropout_prob=CONFIG['dropout_rate'],
+                attention_probs_dropout_prob=CONFIG['dropout_rate'],
+            )
             num_ftrs = model.classifier.in_features
             model.classifier = nn.Linear(in_features=num_ftrs, out_features=out_features, bias=True)
-        elif model_name == "resnet18":
+        elif model_name.startswith("resnet"):
             model = torch.hub.load('pytorch/vision:v0.10.0', model_name, pretrained=True)
             num_ftrs = model.fc.in_features
             model.fc = nn.Linear(in_features=num_ftrs, out_features=out_features, bias=True)
+            if CONFIG['dropout_rate'] > 0:
+                append_dropout(model, CONFIG['dropout_rate'])
         else:
             raise ValueError(f"{model_name} not a valid model name!")
 
         print(f"Use fresh pretrained model = {CONFIG['new_model_name']}\n")
         print_n_train_params(model)
+        
+        print(model)
+        
         print(" ")
     else:
         model = torch.load(CONFIG['resumed_model_path'])  
         print(f"Use our trained model = {CONFIG['resumed_model_path']}\n")
     return model
+
+
+def append_dropout(model, dropout_rate):
+    """ Append dropout layer after each ReLU layer.
+
+    Args:
+        model (pytorch model object): model for adding dropouts.
+        dropout_rate (float, optional): dropout rate.
+    """
+    for name, module in model.named_children():
+        if len(list(module.children())) > 0:
+            append_dropout(module, dropout_rate)
+        if isinstance(module, nn.ReLU):
+            new = nn.Sequential(module, nn.Dropout2d(p=dropout_rate))
+            setattr(model, name, new)
 
 
 def save_model(CONFIG, model, epoch, test_loss):
@@ -245,26 +270,31 @@ if __name__ == '__main__':
     print(list_avail_model_names())
 
     CONFIG = {
-        'epoch': 10,
-        'batch_size': 30,
-        'load_new_model': True,
-        # 'new_model_name': "google/vit-base-patch16-224",  # for 'load_new_model' = True
-        'new_model_name': "resnet18",  # for 'load_new_model' = True
-        'resumed_model_path': Path(""),  # for 'load_new_model' = False
-        'output_folder': Path("C:/Users/abcd2/Downloads/tmp_dev_outputs"),  # needs to be non-existing
-        'dataset_folder': Path("C:/Users/abcd2/Datasets/2022_icml_lens_sim/dev_256"),
-        'init_learning_rate': 1e-3,
-        'target_keys_weights': {
+        "epoch": 4,
+        # "epoch": 10,
+        "batch_size": 10,
+        # "batch_size": 30,
+        "load_new_model": True,
+        'new_model_name': "google/vit-base-patch16-224",  # for 'load_new_model' = True
+        # 'new_model_name': "resnet18",  # for 'load_new_model' = True
+        # "new_model_name": "resnet152",  # for 'load_new_model' = True
+        "resumed_model_path": Path(""),  # for 'load_new_model' = False
+        "output_folder": Path("C:/Users/abcd2/Downloads/tmp_dev_outputs"),  # needs to be non-existing
+        "dataset_folder": Path("C:/Users/abcd2/Datasets/2022_icml_lens_sim/dev_256"),
+        # 'dataset_folder': Path("C:/Users/abcd2/Datasets/2022_icml_lens_sim/geoff_30000"),
+        "init_learning_rate": 1e-3,
+        "dropout_rate": 0.1,
+        "target_keys_weights": {
             "theta_E": 1, 
             "gamma": 1, 
             "center_x": 1, 
             "center_y": 1, 
             "e1": 1, 
             "e2": 1, 
-            "gamma_ext": 1, 
-            "psi_ext": 1, 
             "lens_light_R_sersic": 1, 
             "lens_light_n_sersic": 1,
+            # "gamma_ext": 1, 
+            # "psi_ext": 1, 
         }
     }
 
