@@ -3,7 +3,6 @@
     Modified by Kuan-Wei Huang
 """
 
-from xml.dom.minidom import NamedNodeMap
 import numpy as np
 
 import torch
@@ -116,10 +115,7 @@ def load_model(CONFIG):
             raise ValueError(f"{model_name} not a valid model name!")
 
         print(f"Use fresh pretrained model = {CONFIG['new_model_name']}\n")
-        print_n_train_params(model)
-        
-        print(model)
-        
+        print_n_train_params(model)        
         print(" ")
     else:
         model = torch.load(CONFIG['resumed_model_path'])  
@@ -270,13 +266,10 @@ if __name__ == '__main__':
     print(list_avail_model_names())
 
     CONFIG = {
-        "epoch": 4,
-        # "epoch": 10,
-        "batch_size": 10,
-        # "batch_size": 30,
+        "epoch": 10,
+        "batch_size": 30,
         "load_new_model": True,
         'new_model_name': "google/vit-base-patch16-224",  # for 'load_new_model' = True
-        # 'new_model_name': "resnet18",  # for 'load_new_model' = True
         # "new_model_name": "resnet152",  # for 'load_new_model' = True
         "resumed_model_path": Path(""),  # for 'load_new_model' = False
         "output_folder": Path("C:/Users/abcd2/Downloads/tmp_dev_outputs"),  # needs to be non-existing
