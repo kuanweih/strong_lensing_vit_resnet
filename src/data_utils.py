@@ -1,5 +1,4 @@
 import torch
-
 import scipy.ndimage
 
 import numpy as np
@@ -8,9 +7,7 @@ import pandas as pd
 from pathlib import Path
 
 from torchvision import transforms
-
 from torch.utils.data import Dataset, DataLoader
-
 
 
 
@@ -37,9 +34,9 @@ class DeepLenstronomyDataset(Dataset):
         self.target_transform = target_transform
         self.use_train = use_train  # training set or test set
         if self.use_train:
-            self.df = pd.read_csv(Path(f"{self.root_dir}/metadata_train.csv"))
+            self.df = pd.read_csv(Path(f"{self.root_dir}/metadata_train_scaled.csv"))
         else:
-            self.df = pd.read_csv(Path(f"{self.root_dir}/metadata_test.csv"))
+            self.df = pd.read_csv(Path(f"{self.root_dir}/metadata_test_scaled.csv"))
 
     def __getitem__(self, index):
         if "img_name" in self.df.keys():
