@@ -1,6 +1,7 @@
-""" Code taken from https://github.com/joshualin24/vit_strong_lensing/blob/master/vit.py 
+""" Code taken from https://github.com/joshualin24/vit_strong_lensing/blob/master/vit.py
     Originally created by 2022-4-4 neural modelworks by Joshua Yao-Yu Lin
     Modified by Kuan-Wei Huang
+    Modified by Joshua Lin (2022-07-07)
 """
 
 import numpy as np
@@ -75,7 +76,7 @@ def nll_diagonal(target, mu, logvar, device, CONFIG):
     sq_err = (target - mu) * (target - mu)
 
     loss = 0.5 * (precision*sq_err + logvar + np.log(2*np.pi))
-    loss = torch.sum(loss*weight, dim=1)  # weighted sum accross targets 
+    loss = torch.sum(loss*weight, dim=1)  # weighted sum accross targets
     loss = torch.mean(loss, dim=0) # accross batch samples
     return loss
 
@@ -94,12 +95,12 @@ def load_model(CONFIG):
     """
     if CONFIG['load_new_model']:
         model_name = CONFIG['new_model_name']
-        n_targets = len(CONFIG['target_keys_weights']) 
+        n_targets = len(CONFIG['target_keys_weights'])
         out_features = 2 * n_targets  # double the len for uncertainties
 
         if model_name == "google/vit-base-patch16-224":
             model = ViTForImageClassification.from_pretrained(
-                model_name, 
+                model_name,
                 hidden_dropout_prob=CONFIG['dropout_rate'],
                 attention_probs_dropout_prob=CONFIG['dropout_rate'],
             )
@@ -118,7 +119,7 @@ def load_model(CONFIG):
         print_n_train_params(model)
         print(" ")
     else:
-        model = torch.load(CONFIG['resumed_model_path'])  
+        model = torch.load(CONFIG['resumed_model_path'])
         print(f"Use our trained model = {CONFIG['resumed_model_path']}\n")
     return model
 
@@ -158,7 +159,7 @@ def calc_pred(model, data):
 
         pred = model(data)
 
-    Different model objects have different pred shapes by default such as 
+    Different model objects have different pred shapes by default such as
     ViT and ResNet and that's what the if statements are for.
 
         'pred' will be split into 'pred_mu' and 'pred_logvar'
@@ -171,7 +172,7 @@ def calc_pred(model, data):
         TypeError: type(model) has to be checked
 
     Returns:
-        [torch.Tensor]: pred_mu: target prediction 
+        [torch.Tensor]: pred_mu: target prediction
         [torch.Tensor]: pred_logvar: prediction log variance
     """
     if isinstance(model, ViTForImageClassification):
@@ -180,7 +181,7 @@ def calc_pred(model, data):
         pred = model(data)
     else:
         raise TypeError(f"{type(model)} not implemented for correct pred shape.")
-    
+
     pred_mu, pred_logvar = torch.tensor_split(pred, 2, dim=1)
 
     return pred_mu, pred_logvar
@@ -209,7 +210,7 @@ def train_model(CONFIG):
     optimizer = optim.Adam(model.parameters(), lr=CONFIG['init_learning_rate'])
 
     best_test_loss = float("inf")  # to identify best model ever seen
-    
+
     train_history = CacheHistory("train")
     test_history = CacheHistory("test")
 
@@ -240,7 +241,7 @@ def train_model(CONFIG):
 
             for data, target_dict in test_loader:
                 data, target = prepare_data_and_target(data, target_dict, device)
-                pred_mu, pred_logvar = calc_pred(model, data)  
+                pred_mu, pred_logvar = calc_pred(model, data)
                 loss = nll_diagonal(target, pred_mu, pred_logvar, device, CONFIG)
 
                 cache_test.update_cache(pred_mu, target)
@@ -272,26 +273,23 @@ if __name__ == '__main__':
         'new_model_name': "google/vit-base-patch16-224",  # for 'load_new_model' = True
         # "new_model_name": "resnet152",  # for 'load_new_model' = True
         "resumed_model_path": Path(""),  # for 'load_new_model' = False
-        "output_folder": Path("C:/Users/abcd2/Downloads/tmp_dev_outputs"),  # needs to be non-existing
-        "dataset_folder": Path("C:/Users/abcd2/Datasets/2022_icml_lens_sim/dev_256"),
+        "output_folder": Path("/media/joshua/Milano/Lensing_Sim_Data/saved_model"),  # needs to be non-existing
+        "dataset_folder": Path("/media/joshua/Milano/Lensing_Sim_Data/dev_90000"),
         # 'dataset_folder': Path("C:/Users/abcd2/Datasets/2022_icml_lens_sim/geoff_30000"),
         "init_learning_rate": 1e-3,
         "dropout_rate": 0.1,
         "target_keys_weights": {
-            "theta_E": 1, 
-            "gamma": 1, 
-            "center_x": 1, 
-            "center_y": 1, 
-            "e1": 1, 
-            "e2": 1, 
-            "lens_light_R_sersic": 1, 
+            "theta_E": 1,
+            "gamma": 1,
+            "center_x": 1,
+            "center_y": 1,
+            "e1": 1,
+            "e2": 1,
+            "lens_light_R_sersic": 1,
             "lens_light_n_sersic": 1,
-            # "gamma_ext": 1, 
-            # "psi_ext": 1, 
+            # "gamma_ext": 1,
+            # "psi_ext": 1,
         }
     }
 
     train_model(CONFIG)
-
-
-
