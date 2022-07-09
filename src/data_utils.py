@@ -44,7 +44,7 @@ class DeepLenstronomyDataset(Dataset):
         else:
             img_name = self.df['img_path'].values[index][-13:]
             print("img_name does not exist in meta csv so hard code by img_path instead.")
-        
+
         img_path = Path(f"{self.root_dir}/{img_name}")
         img = np.load(img_path)
 
@@ -61,7 +61,7 @@ class DeepLenstronomyDataset(Dataset):
         target_dict = {key: self.df[key].iloc[[index]].values for key in self.target_keys_weights}
 
         return image, target_dict
-        
+
     def __len__(self):
         return self.df.shape[0]
 
@@ -86,16 +86,16 @@ def get_train_test_datasets(CONFIG):
 
     train_dataset = DeepLenstronomyDataset(
         CONFIG['target_keys_weights'],
-        CONFIG['dataset_folder'], 
-        use_train=True, 
-        transform=data_transform, 
+        CONFIG['dataset_folder'],
+        use_train=True,
+        transform=data_transform,
         target_transform=target_transform,
     )
     test_dataset = DeepLenstronomyDataset(
         CONFIG['target_keys_weights'],
-        CONFIG['dataset_folder'], 
-        use_train=False, 
-        transform=data_transform, 
+        CONFIG['dataset_folder'],
+        use_train=False,
+        transform=data_transform,
         target_transform=target_transform,
     )
     print("Number of train samples =", train_dataset.__len__())
@@ -118,12 +118,12 @@ def get_train_test_dataloaders(batch_size, train_dataset, test_dataset):
     """
     train_loader = DataLoader(
         train_dataset,
-        batch_size=batch_size, 
+        batch_size=batch_size,
         shuffle=True,
     )
     test_loader = DataLoader(
         test_dataset,
-        batch_size=batch_size, 
+        batch_size=batch_size,
         shuffle=True,
     )
     return train_loader, test_loader

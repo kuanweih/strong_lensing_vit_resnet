@@ -267,8 +267,8 @@ if __name__ == '__main__':
     print(list_avail_model_names())
 
     CONFIG = {
-        "epoch": 10,
-        "batch_size": 30,
+        "epoch": 50,
+        "batch_size": 32,
         "load_new_model": True,
         'new_model_name': "google/vit-base-patch16-224",  # for 'load_new_model' = True
         # "new_model_name": "resnet152",  # for 'load_new_model' = True
@@ -276,15 +276,15 @@ if __name__ == '__main__':
         "output_folder": Path("/media/joshua/Milano/Lensing_Sim_Data/saved_model"),  # needs to be non-existing
         "dataset_folder": Path("/media/joshua/Milano/Lensing_Sim_Data/dev_90000"),
         # 'dataset_folder': Path("C:/Users/abcd2/Datasets/2022_icml_lens_sim/geoff_30000"),
-        "init_learning_rate": 1e-3,
+        "init_learning_rate": 3*1e-4,
         "dropout_rate": 0.1,
         "target_keys_weights": {
-            "theta_E": 1,
-            "gamma": 1,
-            "center_x": 1,
-            "center_y": 1,
-            "e1": 1,
-            "e2": 1,
+            "theta_E": 10,
+            "gamma": 5,
+            "center_x": 10,
+            "center_y": 10,
+            "e1": 5,
+            "e2": 5,
             "lens_light_R_sersic": 1,
             "lens_light_n_sersic": 1,
             # "gamma_ext": 1,
