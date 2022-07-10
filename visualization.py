@@ -1,14 +1,16 @@
 import torch 
 import numpy as np
+import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-import sys
 
 from tqdm import tqdm
+from pathlib import Path
+
 from src.data_utils import get_train_test_dataloaders
 from src.data_utils import get_train_test_datasets
 from train_model import prepare_data_and_target, calc_pred
-from random import randrange
+
 
 
 
@@ -201,3 +203,65 @@ class Visual_loss:
         ax.set_title("loss")
         ax.set_xlabel('epoch')
         ax.set_ylabel('mse')
+
+
+
+
+class PredVisualizer:
+    def __init__(self, dir_output):
+        self.path_pred = Path(f"{dir_output}/pred.csv")
+        self.path_config = Path(f"{dir_output}/CONFIG.npy")
+        self.CONFIG = np.load(self.path_config, allow_pickle=True).item()
+        self.df = pd.read_csv(self.path_pred)
+        self.targets_list = self.CONFIG["target_keys_weights"].keys()
+
+    def plot_each_pred_truth_uncertainty(self, target):
+
+        sns.set(style="white", font_scale=1)
+        fig, ax = plt.subplots(figsize=(6, 6))
+        # plt.figure(figsize=(3, 3))
+
+        ax.set_aspect('equal', adjustable='box')
+        x = self.df[f"{target}____truth"]
+        y = self.df[f"{target}____pred"]
+        z = self.df[f"{target}____sigma"]
+
+        xymin = min(min(x), min(y))
+        xymax = max(max(x), max(y))
+
+        ax.hexbin(x, y, extent=(xymin, xymax, xymin, xymax))
+        ax.plot([xymin, xymax], [xymin, xymax], 'w--', alpha=0.5)
+
+        #pick random 20 points to show the error bars
+        index = np.linspace(0, len(x)-1, 20).astype(int)
+        x_select = [x[i] for i in index]
+        y_select = [y[i] for i in index]
+        z_select = [z[i] for i in index]
+        ax.errorbar(x_select, y_select, yerr=z_select, fmt='.')
+
+        ax.set_title(target)
+        ax.set_xlabel('truth')
+        ax.set_ylabel('prediction')
+
+    def plot_each_zscore(self, target):
+
+        sns.set(style="white", font_scale=1)
+        fig, ax = plt.subplots(figsize=(4, 4))
+
+        truth = self.df[f"{target}____truth"]
+        pred = self.df[f"{target}____pred"]
+        sigma = self.df[f"{target}____sigma"]
+        
+        zscore = (pred - truth) / sigma
+        
+        ax.hist(zscore, histtype='step', lw=2)
+
+        ax.set_title(target)
+        ax.set_xlabel('(pred - truth) / sigma')
+        ax.set_ylabel('count')
+
+        print(f"mean zscore = {zscore.mean()}")
+        print(f"sigma zscore = {zscore.std()}")
+
+        mse = np.mean((pred - truth)**2)
+        print(f"mse = {mse}")
