@@ -90,7 +90,10 @@ class ModelPredictor:
                 mu = scaler.mean_[mask][0]
                 std = scaler.scale_[mask][0]
 
-                df_resumed[key] = mu + self.df_result[key] * std
+                if suffix == "sigma":
+                    df_resumed[key] = self.df_result[key] * std
+                else:
+                    df_resumed[key] = mu + self.df_result[key] * std
 
         self.df_resumed = pd.DataFrame(df_resumed)
 
