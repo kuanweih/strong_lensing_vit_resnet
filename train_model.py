@@ -101,7 +101,7 @@ def load_model(CONFIG):
             model = ViTForImageClassification.from_pretrained(
                 model_name, 
                 hidden_dropout_prob=CONFIG['dropout_rate'],
-                attention_probs_dropout_prob=CONFIG['dropout_rate'],
+                attention_probs_dropout_prob=CONFIG['vit_attention_dropout_rate'],
             )
             num_ftrs = model.classifier.in_features
             model.classifier = nn.Linear(in_features=num_ftrs, out_features=out_features, bias=True)
@@ -277,6 +277,7 @@ if __name__ == '__main__':
         # 'dataset_folder': Path("C:/Users/abcd2/Datasets/2022_icml_lens_sim/geoff_30000"),
         "init_learning_rate": 1e-3,
         "dropout_rate": 0.1,
+        "vit_attention_dropout_rate": 0.0,  # optional for vit models
         "target_keys_weights": {
             "theta_E": 1, 
             "gamma": 1, 
