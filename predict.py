@@ -14,10 +14,11 @@ from src.data_utils import get_test_dataloader, get_test_dataset
 
 
 class ModelPredictor:
-    def __init__(self, dir_output, path_model,
+    def __init__(self, dir_output, path_model, leave_dropout_on=False,
                  dataset_folder=Path("C:/Users/abcd2/Datasets/2022_icml_lens_sim/geoff_1200")):
         self.dir_output = dir_output                 
         self.path_model = path_model
+        self.leave_dropout_on = leave_dropout_on
         self.dataset_folder = dataset_folder
 
         path_config = Path(f"{dir_output}/CONFIG.npy")
@@ -34,7 +35,8 @@ class ModelPredictor:
 
         self.model = torch.load(path_model)
         self.model.to(self.device)
-        self.model.eval()
+        if not leave_dropout_on:
+            self.model.eval()
         
         self.targets_list = self.CONFIG["target_keys_weights"].keys()
 
@@ -72,7 +74,10 @@ class ModelPredictor:
 
         self.df_result = pd.concat([df_truth, df_pred, df_sigma], axis=1)
 
-        path_pred_scaled = Path(f"{self.dir_output}/pred_scaled.csv")
+        if self.leave_dropout_on:
+            path_pred_scaled = Path(f"{self.dir_output}/pred_scaled_dp.csv")
+        else:
+            path_pred_scaled = Path(f"{self.dir_output}/pred_scaled.csv")
         self.df_result.to_csv(path_pred_scaled, index=False)
         print(f"Saved pred_scaled.csv to {path_pred_scaled} \n")
 
@@ -97,14 +102,17 @@ class ModelPredictor:
 
         self.df_resumed = pd.DataFrame(df_resumed)
 
-        path_pred = Path(f"{self.dir_output}/pred.csv")
+        if self.leave_dropout_on:
+            path_pred = Path(f"{self.dir_output}/pred_dp.csv")
+        else:
+            path_pred = Path(f"{self.dir_output}/pred.csv")
         self.df_resumed.to_csv(path_pred, index=False)
         print(f"Scaled back and saved pred.csv to {path_pred} \n")
 
         # # sanity check
         # df_meta = pd.read_csv(f"{self.dataset_folder}/metadata.csv")
         # for target in self.targets_list:
-        #     key = f"{target}____{suffix}"
+        #     key = f"{target}____truth"
         #     print(np.mean((self.df_resumed[key] - df_meta[target])**2))
         
 
