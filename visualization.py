@@ -208,8 +208,11 @@ class Visual_loss:
 
 
 class PredVisualizer:
-    def __init__(self, dir_output):
-        self.path_pred = Path(f"{dir_output}/pred.csv")
+    def __init__(self, dir_output, dropout_on=False):
+        if dropout_on:
+            self.path_pred = Path(f"{dir_output}/pred_dp.csv")
+        else:
+            self.path_pred = Path(f"{dir_output}/pred.csv")
         self.path_config = Path(f"{dir_output}/CONFIG.npy")
         self.CONFIG = np.load(self.path_config, allow_pickle=True).item()
         self.df = pd.read_csv(self.path_pred)
@@ -219,7 +222,6 @@ class PredVisualizer:
 
         sns.set(style="white", font_scale=1)
         fig, ax = plt.subplots(figsize=(6, 6))
-        # plt.figure(figsize=(3, 3))
 
         ax.set_aspect('equal', adjustable='box')
         x = self.df[f"{target}____truth"]
@@ -260,8 +262,170 @@ class PredVisualizer:
         ax.set_xlabel('(pred - truth) / sigma')
         ax.set_ylabel('count')
 
+        print(f"\nsummay stats of {target}")
         print(f"mean zscore = {zscore.mean()}")
         print(f"sigma zscore = {zscore.std()}")
 
-        mse = np.mean((pred - truth)**2)
-        print(f"mse = {mse}")
+        rms = np.sqrt(np.mean((pred - truth)**2))
+        print(f"rms = {rms}")
+
+
+
+
+class Paper2Models:
+    def __init__(self, tag1, dir_output1, tag2, dir_output2, dropout_on=False):
+        self.tag1 = tag1
+        self.dir_output1 = dir_output1
+        self.tag2 = tag2
+        self.dir_output2 = dir_output2
+
+        if dropout_on:
+            self.path_pred1 = Path(f"{self.dir_output1}/pred_dp.csv")
+            self.path_pred2 = Path(f"{self.dir_output2}/pred_dp.csv")
+        else:
+            self.path_pred1 = Path(f"{self.dir_output1}/pred.csv")
+            self.path_pred2 = Path(f"{self.dir_output2}/pred.csv")
+
+        self.path_config1 = Path(f"{self.dir_output1}/CONFIG.npy")
+        self.path_config2 = Path(f"{self.dir_output2}/CONFIG.npy")
+        self.CONFIG1 = np.load(self.path_config1, allow_pickle=True).item()
+        self.CONFIG2 = np.load(self.path_config2, allow_pickle=True).item()
+
+        self.dfs = {
+            self.tag1: pd.read_csv(self.path_pred1),
+            self.tag2: pd.read_csv(self.path_pred2),
+        }
+
+        self.targets_list = list(self.CONFIG1["target_keys_weights"].keys())
+        self.n_total_sample = self.dfs[self.tag1].shape[0]
+
+        self.dict_target_map = {
+            'theta_E': r"$\theta_E$ [arcsec]",
+            'gamma': r"$\gamma$",
+            'center_x': r"$\theta_1$ [arcsec]",
+            'center_y': r"$\theta_2$ [arcsec]",
+            'e1': r"$e_1$",
+            'e2': r"$e_2$",
+            'lens_light_R_sersic': r"$R_{eff}$ [arcsec]",
+            'lens_light_n_sersic': r"$n_{sersic}$",
+        }
+
+    def plot_random_samples(self, nsample):
+        sns.set(style="white", font_scale=1)
+        fig, ax = plt.subplots(2, 4, figsize=(18, 9))
+        plt.subplots_adjust(wspace=0.3, hspace=0.3)
+
+        dict_alpha = {
+            self.tag1: 0.5,
+            self.tag2: 1,
+        }
+        index = np.linspace(1, self.n_total_sample - 1, nsample).astype(int)
+
+        for tag, df in self.dfs.items():
+            df_sample = df.iloc[index]
+
+            for r in range(2):
+                for c in range(4):
+                    itarget = 4 * (r % 2) + c
+                    target = self.targets_list[itarget]
+
+                    truth = df_sample[f"{target}____truth"]
+                    pred = df_sample[f"{target}____pred"]
+                    sigma = df_sample[f"{target}____sigma"]
+
+                    xymin = min(min(truth), min(pred))
+                    xymax = max(max(truth), max(pred))
+
+                    ax[r, c].plot([xymin, xymax], [xymin, xymax], 'k--', alpha=0.5, lw=1)
+                    ax[r, c].errorbar(truth, pred, yerr=sigma, fmt='.', label=tag, 
+                                      lw=1, ms=2, alpha=dict_alpha[tag])
+
+                    ax[r, c].legend()
+                    ax[r, c].set_title(self.dict_target_map[target])
+                    ax[r, c].set_xlabel('truth')
+                    ax[r, c].set_ylabel('prediction')
+
+    def plot_zscore(self):
+
+        sns.set(style="whitegrid", font_scale=1)
+        fig, ax = plt.subplots(2, 4, figsize=(18, 9))
+        plt.subplots_adjust(wspace=0.3, hspace=0.3)
+
+        for tag, df in self.dfs.items():
+
+            for r in range(2):
+                for c in range(4):
+                    itarget = 4 * (r % 2) + c
+                    target = self.targets_list[itarget]
+
+                    truth = df[f"{target}____truth"]
+                    pred = df[f"{target}____pred"]
+                    sigma = df[f"{target}____sigma"]
+
+                    zscore = (pred - truth) / sigma
+        
+                    ax[r, c].hist(zscore, bins=np.linspace(-5, 5, 30), 
+                                  histtype='step', lw=2, label=tag)
+
+                    ax[r, c].legend()
+                    ax[r, c].set_title(self.dict_target_map[target])
+                    ax[r, c].set_xlabel('(pred - truth) / sigma')
+                    ax[r, c].set_ylabel('count')
+
+
+    def plot_precision(self, log=False):
+
+        sns.set(style="whitegrid", font_scale=1)
+        fig, ax = plt.subplots(2, 4, figsize=(18, 9))
+        plt.subplots_adjust(wspace=0.3, hspace=0.3)
+
+        for tag, df in self.dfs.items():
+
+            for r in range(2):
+                for c in range(4):
+                    itarget = 4 * (r % 2) + c
+                    target = self.targets_list[itarget]
+
+                    truth = df[f"{target}____truth"]
+                    pred = df[f"{target}____pred"]
+
+                    precision = (pred - truth) / truth
+        
+                    ax[r, c].hist(precision, bins=np.linspace(-2, 2, 30), log=log,
+                                  histtype='step', lw=2, label=tag)
+
+                    ax[r, c].legend()
+                    ax[r, c].set_title(self.dict_target_map[target])
+                    ax[r, c].set_xlabel('(pred - truth) / truth')
+                    ax[r, c].set_ylabel('count')
+
+
+    def print_summary(self):
+
+        
+        for itarget in range(8):
+            for tag, df in self.dfs.items():
+                target = self.targets_list[itarget]
+
+                truth = df[f"{target}____truth"]
+                pred = df[f"{target}____pred"]
+                sigma = df[f"{target}____sigma"]
+
+                zscore = (pred - truth) / sigma
+                precision = (pred - truth) / truth
+
+                rms = np.sqrt(np.mean((pred - truth)**2))
+                median_precision = np.median(precision)
+                mean_precision = np.mean(precision)                
+                std_precision = np.std(precision)
+                median_sigma = np.median(sigma)
+                mean_sigma = np.mean(sigma)
+
+                print(f"{tag}:  {self.dict_target_map[target]}")
+                print(f"    median precision = {median_precision:0.4f}")
+                print(f"    mean precision = {mean_precision:0.4f}")
+                print(f"    std precision = {std_precision:0.4f}")
+                print(f"    median sigma = {median_sigma:0.4f}")
+                print(f"    mean sigma = {mean_sigma:0.4f}")
+                print(f"    rms = {rms:0.4f}")
+                print(" ")
