@@ -1,7 +1,6 @@
 """ Module to made prediction for test set from a given model.
 """
 
-import glob
 import torch 
 import numpy as np
 import pandas as pd
@@ -142,9 +141,13 @@ class BayesianInference:
         
         self.targets, self.res_dict = self._get_targets_and_init_dict(self.file_paths[0])
         self.posterior_dict = self._calc_posteriors()
+    
+        np.save(f"{self.dir_output}/posterior.npy",
+                {**self.res_dict, **self.posterior_dict})
         
-        self.res_dict = {**self.res_dict, **self.posterior_dict}
-        np.save(f"{self.dir_output}/posterior.npy", self.res_dict)
+        self.final_pred_dict = self._calc_final_pred_sigma()
+        self.df_pred = pd.DataFrame({**self.res_dict, **self.final_pred_dict})
+        self.df_pred.to_csv(f"{self.dir_output}/final_pred.csv", index=False)
 
     def _get_targets_and_init_dict(self, file_path):
         res_dict = {}
@@ -177,3 +180,11 @@ class BayesianInference:
             posterior_dict[key] = np.array(posterior_dict[key])
             posterior_dict[f"{key}____posterior"] = posterior_dict.pop(key)
         return posterior_dict
+
+    def _calc_final_pred_sigma(self):
+        final_pred_dict = {}
+        for target in self.targets:
+            posterior = self.posterior_dict[f"{target}____posterior"]
+            final_pred_dict[f"{target}____pred"] = np.mean(posterior, axis=0)
+            final_pred_dict[f"{target}____sigma"] = np.std(posterior, axis=0)
+        return final_pred_dict

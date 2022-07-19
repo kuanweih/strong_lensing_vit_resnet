@@ -280,8 +280,8 @@ class Paper2Models:
         self.dir_output2 = dir_output2
 
         if dropout_on:
-            self.path_pred1 = Path(f"{self.dir_output1}/pred_dp.csv")
-            self.path_pred2 = Path(f"{self.dir_output2}/pred_dp.csv")
+            self.path_pred1 = Path(f"{self.dir_output1}/final_pred.csv")
+            self.path_pred2 = Path(f"{self.dir_output2}/final_pred.csv")
         else:
             self.path_pred1 = Path(f"{self.dir_output1}/pred.csv")
             self.path_pred2 = Path(f"{self.dir_output2}/pred.csv")
