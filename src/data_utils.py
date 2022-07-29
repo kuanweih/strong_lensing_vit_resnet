@@ -24,7 +24,7 @@ class DeepLenstronomyDataset(Dataset):
         Args:
             target_keys (list): list of targets (Y)
             root_dir (pathlib.Path object): dir of dataset
-            use_train (bool, optional): True: training set. False: testing set. Defaults to True.
+            use_train (bool, optional): True: training set. False: valiation set. Defaults to True.
             transform (torchvision.transforms, optional): transforms for images (X). Defaults to None.
             target_transform (torchvision.transforms, optional): transforms for targets (Y). Defaults to None.
         """
@@ -127,3 +127,80 @@ def get_train_test_dataloaders(batch_size, train_dataset, test_dataset):
         shuffle=True,
     )
     return train_loader, test_loader
+
+
+# Below are for test set. Originally we only split into 2 sets: train and valid. 
+# Now we have an extra set as the test set. I wrote the code below quickly so there 
+# might have some code duplication or bad logic. Maybe can break down sets granularly.
+
+
+class TestsetDeepLenstronomyDataset(DeepLenstronomyDataset):
+    """ The TestsetDeepLenstronomyDataset class inherated from DeepLenstronomyDataset.
+
+    Args:
+        DeepLenstronomyDataset: DeepLenstronomyDataset class
+    """
+    def __init__(self, target_keys_weights, root_dir, transform=None, target_transform=None):
+        """ Initialize the class.
+
+        Args:
+            target_keys (list): list of targets (Y)
+            root_dir (pathlib.Path object): dir of dataset
+            use_train (bool, optional): True: training set. False: testing set. Defaults to True.
+            transform (torchvision.transforms, optional): transforms for images (X). Defaults to None.
+            target_transform (torchvision.transforms, optional): transforms for targets (Y). Defaults to None.
+        """
+        self.target_keys_weights = target_keys_weights
+        self.root_dir = root_dir
+        self.transform = transform
+        self.target_transform = target_transform
+        self.df = pd.read_csv(Path(f"{self.root_dir}/metadata_scaled.csv"))
+
+
+
+
+def get_test_dataset(CONFIG):
+    """ Create DeepLenstronomyDataset objects.
+
+    Args:
+        CONFIG (dict): CONFIG
+
+    Returns:
+        train_dataset (DeepLenstronomyDataset): training dataset
+        test_dataset (DeepLenstronomyDataset): testing dataset
+    """
+    data_transform = transforms.Compose([
+        transforms.ToTensor(), # scale to [0,1] and convert to tensor
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
+    target_transform = torch.Tensor
+
+    test_dataset = TestsetDeepLenstronomyDataset(
+        CONFIG['target_keys_weights'],
+        CONFIG['dataset_folder'], 
+        transform=data_transform, 
+        target_transform=target_transform,
+    )
+    print("Number of test samples =", test_dataset.__len__())
+    print(" ")
+    return test_dataset
+
+
+def get_test_dataloader(batch_size, test_dataset):
+    """ Convert Datasets into DataLoaders.
+
+    Args:
+        batch_size (int): batch size
+        train_dataset (Dataset object): DeepLenstronomyDataset
+        test_dataset (Dataset object): DeepLenstronomyDataset
+
+    Returns:
+        train_loader (DataLoader object): training DataLoader
+        test_loader (DataLoader object): testing DataLoader
+    """
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=batch_size, 
+        shuffle=False,
+    )
+    return test_loader
