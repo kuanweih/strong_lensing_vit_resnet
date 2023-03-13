@@ -4,6 +4,8 @@ This repo contains all our code for using the Vision Transformer models on the i
 
 Authors: Kuan-Wei Huang, Geoff Chih-Fan Chen, Po-Wen Chang, Sheng-Chieh Lin, ChiaJung Hsu, Vishal Thengane, and Joshua Yao-Yu Lin
 
+[Tag v3.0.0](https://github.com/kuanweih/strong_lensing_vit_resnet/tree/v3.0.0) is the code version when the paper was submitted.
+
 ## Data generation / preparation using Lenstronomy
 - [This notebook](https://github.com/kuanweih/strong_lensing_vit_resnet/blob/main/notebooks/Lenstronomy_simulation_dev.ipynb) is used to generate the images (data) and paramters (targets) as the dataset for the strong lensing systems.
 - [This notebook](https://github.com/kuanweih/strong_lensing_vit_resnet/blob/main/notebooks/split_geoff_30000.ipynb) is used to process the dataset: data split and target normalization. 
