@@ -1,7 +1,8 @@
-# strong_lensing_simulation
+# Strong Gravitational Lensing Parameter Estimation with Vision Transformer
 
+This repo contains all our code for using the Vision Transformer models on the imaging multi-regression task of parameter and uncertainty estimation for strong lensing systems. The paper is published in the [ECCV 2022 Workshops](https://link.springer.com/chapter/10.1007/978-3-031-25056-9_10) and this is [the arXiv link](https://arxiv.org/pdf/2210.04143.pdf).
 
-This repo contains all our code for the imaging multi-regression task of parameter and uncertainty estimation for strong lensing systems. 
+Authors: Kuan-Wei Huang, Geoff Chih-Fan Chen, Po-Wen Chang, Sheng-Chieh Lin, ChiaJung Hsu, Vishal Thengane, and Joshua Yao-Yu Lin
 
 ## Data generation / preparation using Lenstronomy
 - [This notebook](https://github.com/kuanweih/strong_lensing_vit_resnet/blob/main/notebooks/Lenstronomy_simulation_dev.ipynb) is used to generate the images (data) and paramters (targets) as the dataset for the strong lensing systems.
